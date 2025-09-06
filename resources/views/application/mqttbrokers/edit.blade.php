@@ -87,15 +87,6 @@
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
-
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Client ID</label>
-                                    <input type="text" name="client_id" class="form-control @error('client_id') is-invalid @enderror" 
-                                           placeholder="Auto-generated if empty" value="{{ old('client_id', $mqttbroker->client_id) }}">
-                                    @error('client_id')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
                             </div>
 
                             <!-- Authentication -->

@@ -87,15 +87,6 @@
                                     @enderror
                                 </div>
 
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Client ID</label>
-                                    <input type="text" name="client_id" class="form-control @error('client_id') is-invalid @enderror" 
-                                           placeholder="Auto-generated if empty" value="{{ old('client_id') }}">
-                                    @error('client_id')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-
                             </div>
 
                             <!-- Authentication -->
@@ -225,6 +216,7 @@
     </div>
 @endsection
 
+@section('scripts')
 <script>
 function testConnectionFromForm() {
     const button = event.target;
@@ -257,7 +249,8 @@ function testConnectionFromForm() {
         ssl_port: sslPort ? parseInt(sslPort) : null,
         username: username || null,
         password: password || null,
-        timeout: timeout ? parseInt(timeout) : 30
+        timeout: timeout ? parseInt(timeout) : 30,
+        _token: '{{ csrf_token() }}' // Fix: Use Laravel's csrf_token() helper
     };
     
     // Make AJAX request to test connection
@@ -265,7 +258,7 @@ function testConnectionFromForm() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            'X-CSRF-TOKEN': '{{ csrf_token() }}' // Fix: Use Laravel's csrf_token() helper
         },
         body: JSON.stringify(testData)
     })
@@ -340,3 +333,4 @@ function showNotification(message, type) {
     }, 5000);
 }
 </script>
+@endsection
