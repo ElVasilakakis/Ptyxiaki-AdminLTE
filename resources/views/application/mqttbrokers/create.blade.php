@@ -1,5 +1,123 @@
 @extends('layouts.application.app')
 
+@section('scripts')
+<script>
+function testConnectionFromForm() {
+    const button = event.target;
+    const originalContent = button.innerHTML;
+    
+    // Get form values
+    const host = document.querySelector('input[name="host"]').value;
+    const port = document.querySelector('input[name="port"]').value;
+    const useSSL = document.querySelector('input[name="use_ssl"]').checked;
+    const sslPort = document.querySelector('input[name="ssl_port"]').value;
+    const username = document.querySelector('input[name="username"]').value;
+    const password = document.querySelector('input[name="password"]').value;
+    const timeout = document.querySelector('input[name="timeout"]').value;
+    
+    // Validate required fields
+    if (!host || !port) {
+        showNotification('Please fill in the Host and Port fields before testing connection.', 'error');
+        return;
+    }
+    
+    // Show loading state
+    button.innerHTML = '<i class="ph-spinner ph-spin me-2"></i>Testing...';
+    button.disabled = true;
+    
+    // Prepare test data
+    const testData = {
+        host: host,
+        port: parseInt(port),
+        use_ssl: useSSL,
+        ssl_port: sslPort ? parseInt(sslPort) : null,
+        username: username || null,
+        password: password || null,
+        timeout: timeout ? parseInt(timeout) : 30
+    };
+    
+    // Make AJAX request to test connection
+    fetch('/app/mqttbrokers/test-connection-form', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify(testData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(`Connection test successful! ${data.message}`, 'success');
+            
+            // Temporarily change button to success state
+            button.innerHTML = '<i class="ph-check me-2"></i>Connection Successful';
+            button.classList.remove('btn-outline-success');
+            button.classList.add('btn-success');
+            
+            setTimeout(() => {
+                button.innerHTML = originalContent;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-outline-success');
+            }, 3000);
+        } else {
+            showNotification(`Connection test failed: ${data.message}`, 'error');
+            
+            // Temporarily change button to error state
+            button.innerHTML = '<i class="ph-x me-2"></i>Connection Failed';
+            button.classList.remove('btn-outline-success');
+            button.classList.add('btn-danger');
+            
+            setTimeout(() => {
+                button.innerHTML = originalContent;
+                button.classList.remove('btn-danger');
+                button.classList.add('btn-outline-success');
+            }, 3000);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Connection test failed due to network error.', 'error');
+        
+        // Reset button state
+        button.innerHTML = '<i class="ph-x me-2"></i>Test Failed';
+        button.classList.remove('btn-outline-success');
+        button.classList.add('btn-danger');
+        
+        setTimeout(() => {
+            button.innerHTML = originalContent;
+            button.classList.remove('btn-danger');
+            button.classList.add('btn-outline-success');
+        }, 3000);
+    })
+    .finally(() => {
+        button.disabled = false;
+    });
+}
+
+function showNotification(message, type) {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+</script>
+@endsection
+
 @section('content')
     <div class="content">
         <div class="row">
@@ -214,123 +332,4 @@
             </div>
         </div>
     </div>
-@endsection
-
-@section('scripts')
-<script>
-function testConnectionFromForm() {
-    const button = event.target;
-    const originalContent = button.innerHTML;
-    
-    // Get form values
-    const host = document.querySelector('input[name="host"]').value;
-    const port = document.querySelector('input[name="port"]').value;
-    const useSSL = document.querySelector('input[name="use_ssl"]').checked;
-    const sslPort = document.querySelector('input[name="ssl_port"]').value;
-    const username = document.querySelector('input[name="username"]').value;
-    const password = document.querySelector('input[name="password"]').value;
-    const timeout = document.querySelector('input[name="timeout"]').value;
-    
-    // Validate required fields
-    if (!host || !port) {
-        showNotification('Please fill in the Host and Port fields before testing connection.', 'error');
-        return;
-    }
-    
-    // Show loading state
-    button.innerHTML = '<i class="ph-spinner ph-spin me-2"></i>Testing...';
-    button.disabled = true;
-    
-    // Prepare test data
-    const testData = {
-        host: host,
-        port: parseInt(port),
-        use_ssl: useSSL,
-        ssl_port: sslPort ? parseInt(sslPort) : null,
-        username: username || null,
-        password: password || null,
-        timeout: timeout ? parseInt(timeout) : 30,
-        _token: '{{ csrf_token() }}' // Fix: Use Laravel's csrf_token() helper
-    };
-    
-    // Make AJAX request to test connection
-    fetch('/app/mqttbrokers/test-connection-form', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': '{{ csrf_token() }}' // Fix: Use Laravel's csrf_token() helper
-        },
-        body: JSON.stringify(testData)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showNotification(`Connection test successful! ${data.message}`, 'success');
-            
-            // Temporarily change button to success state
-            button.innerHTML = '<i class="ph-check me-2"></i>Connection Successful';
-            button.classList.remove('btn-outline-success');
-            button.classList.add('btn-success');
-            
-            setTimeout(() => {
-                button.innerHTML = originalContent;
-                button.classList.remove('btn-success');
-                button.classList.add('btn-outline-success');
-            }, 3000);
-        } else {
-            showNotification(`Connection test failed: ${data.message}`, 'error');
-            
-            // Temporarily change button to error state
-            button.innerHTML = '<i class="ph-x me-2"></i>Connection Failed';
-            button.classList.remove('btn-outline-success');
-            button.classList.add('btn-danger');
-            
-            setTimeout(() => {
-                button.innerHTML = originalContent;
-                button.classList.remove('btn-danger');
-                button.classList.add('btn-outline-success');
-            }, 3000);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showNotification('Connection test failed due to network error.', 'error');
-        
-        // Reset button state
-        button.innerHTML = '<i class="ph-x me-2"></i>Test Failed';
-        button.classList.remove('btn-outline-success');
-        button.classList.add('btn-danger');
-        
-        setTimeout(() => {
-            button.innerHTML = originalContent;
-            button.classList.remove('btn-danger');
-            button.classList.add('btn-outline-success');
-        }, 3000);
-    })
-    .finally(() => {
-        button.disabled = false;
-    });
-}
-
-function showNotification(message, type) {
-    // Create notification element
-    const notification = document.createElement('div');
-    notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
-    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    notification.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    // Add to page
-    document.body.appendChild(notification);
-    
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.remove();
-        }
-    }, 5000);
-}
-</script>
 @endsection

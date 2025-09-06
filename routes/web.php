@@ -10,7 +10,7 @@ use App\Http\Controllers\Application\MQTTBrokersController;
 
 // Authentication Routes (Guest only)
 Route::middleware('guest')->group(function () {
-    Route::get('/login', [AuthController::class, 'login'])->name('auth.login');
+    Route::get('/login', [AuthController::class, 'login'])->name('login'); // Changed from 'auth.login'
     Route::post('/login', [AuthController::class, 'handleLogin'])->name('auth.login.post');
     Route::get('/register', [AuthController::class, 'register'])->name('auth.register');
     Route::post('/register', [AuthController::class, 'handleRegister'])->name('auth.register.post');
@@ -27,7 +27,6 @@ Route::get('/', function () {
 });
 
 // Application Routes (Protected by authentication)
-
 Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
 
     Route::get('/', function () {

@@ -25,7 +25,7 @@
     </div>
 @endsection
 
-@push('scripts')
+@section('scripts')
 <script>
 function toggleBrokerStatus(brokerId, isActive) {
     // Show loading state
@@ -169,7 +169,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-@endpush
+@endsection
 
 @section('content')
     <div class="content">
