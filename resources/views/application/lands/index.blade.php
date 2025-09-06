@@ -25,7 +25,7 @@
     </div>
 @endsection
 
-@push('scripts')
+@section('scripts')
 <script>
 function toggleLandStatus(landId, isEnabled) {
     // Show loading state
@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-@endpush
+@endsection
 
 
 

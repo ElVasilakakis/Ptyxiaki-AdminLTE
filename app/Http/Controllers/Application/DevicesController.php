@@ -38,11 +38,10 @@ class DevicesController extends Controller
             'device_type' => 'required|in:sensor,actuator,gateway,controller',
             'mqtt_broker_id' => 'required|exists:mqtt_brokers,id',
             'land_id' => 'required|exists:lands,id',
-            'location_lat' => 'nullable|numeric|between:-90,90',
-            'location_lng' => 'nullable|numeric|between:-180,180',
             'status' => 'required|in:online,offline,maintenance,error',
             'installed_at' => 'nullable|date',
-            'topics' => 'nullable|string',
+            'topics' => 'nullable|array',
+            'topics.*' => 'nullable|string|max:255',
             'configuration' => 'nullable|string',
             'description' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
@@ -69,20 +68,10 @@ class DevicesController extends Controller
                 ->withInput();
         }
 
-        // Prepare location data
-        $location = null;
-        if ($request->location_lat && $request->location_lng) {
-            $location = [
-                'type' => 'Point',
-                'coordinates' => [(float)$request->location_lng, (float)$request->location_lat]
-            ];
-        }
-
         // Prepare topics array
         $topics = null;
-        if ($request->topics) {
-            $topicsArray = array_map('trim', explode(',', $request->topics));
-            $topics = array_filter($topicsArray);
+        if ($request->topics && is_array($request->topics)) {
+            $topics = array_filter(array_map('trim', $request->topics));
         }
 
         // Prepare configuration array
@@ -98,7 +87,6 @@ class DevicesController extends Controller
             'mqtt_broker_id' => $request->mqtt_broker_id,
             'land_id' => $request->land_id,
             'user_id' => Auth::id(),
-            'location' => $location,
             'status' => $request->status,
             'installed_at' => $request->installed_at ? now()->parse($request->installed_at) : null,
             'topics' => $topics,
@@ -148,11 +136,10 @@ class DevicesController extends Controller
             'device_type' => 'required|in:sensor,actuator,gateway,controller',
             'mqtt_broker_id' => 'required|exists:mqtt_brokers,id',
             'land_id' => 'required|exists:lands,id',
-            'location_lat' => 'nullable|numeric|between:-90,90',
-            'location_lng' => 'nullable|numeric|between:-180,180',
             'status' => 'required|in:online,offline,maintenance,error',
             'installed_at' => 'nullable|date',
-            'topics' => 'nullable|string',
+            'topics' => 'nullable|array',
+            'topics.*' => 'nullable|string|max:255',
             'configuration' => 'nullable|string',
             'description' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
@@ -179,20 +166,10 @@ class DevicesController extends Controller
                 ->withInput();
         }
 
-        // Prepare location data
-        $location = null;
-        if ($request->location_lat && $request->location_lng) {
-            $location = [
-                'type' => 'Point',
-                'coordinates' => [(float)$request->location_lng, (float)$request->location_lat]
-            ];
-        }
-
         // Prepare topics array
         $topics = null;
-        if ($request->topics) {
-            $topicsArray = array_map('trim', explode(',', $request->topics));
-            $topics = array_filter($topicsArray);
+        if ($request->topics && is_array($request->topics)) {
+            $topics = array_filter(array_map('trim', $request->topics));
         }
 
         // Prepare configuration array
@@ -207,7 +184,6 @@ class DevicesController extends Controller
             'device_type' => $request->device_type,
             'mqtt_broker_id' => $request->mqtt_broker_id,
             'land_id' => $request->land_id,
-            'location' => $location,
             'status' => $request->status,
             'installed_at' => $request->installed_at ? now()->parse($request->installed_at) : null,
             'topics' => $topics,

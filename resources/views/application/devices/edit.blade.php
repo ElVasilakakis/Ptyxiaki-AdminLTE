@@ -1,6 +1,6 @@
 @extends('layouts.application.app')
 
-@push('scripts')
+@section('scripts')
 <script>
 function showNotification(message, type) {
     // Create notification element
@@ -23,38 +23,69 @@ function showNotification(message, type) {
     }, 5000);
 }
 
-// Validate configuration JSON
-function validateConfiguration() {
-    const configInput = document.querySelector('textarea[name="configuration"]');
-    const configValue = configInput.value.trim();
+// Topics Repeater Functionality
+let topicIndex = {{ $device->topics && is_array($device->topics) ? count($device->topics) : 1 }};
+
+function addTopicField() {
+    const repeater = document.getElementById('topics-repeater');
+    const newItem = document.createElement('div');
+    newItem.className = 'repeater-item mb-3';
+    newItem.style.cssText = 'border: 1px solid #ddd; border-radius: 0.375rem; background-color: #f8f9fa; padding: 1rem;';
     
-    if (configValue) {
-        try {
-            JSON.parse(configValue);
-            configInput.classList.remove('is-invalid');
-            configInput.classList.add('is-valid');
-            return true;
-        } catch (e) {
-            configInput.classList.remove('is-valid');
-            configInput.classList.add('is-invalid');
-            return false;
-        }
+    newItem.innerHTML = `
+        <div class="d-flex gap-3 align-items-center">
+            <div class="flex-fill">
+                <input type="text" name="topics[${topicIndex}]" class="form-control" placeholder="Enter MQTT topic (e.g., sensors/temperature)">
+            </div>
+            <div style="min-width: 100px;">
+                <button type="button" class="btn btn-danger btn-sm remove-topic">
+                    <i class="ph-trash"></i> Remove
+                </button>
+            </div>
+        </div>
+    `;
+    
+    repeater.appendChild(newItem);
+    topicIndex++;
+    
+    // Add event listener to the new remove button
+    newItem.querySelector('.remove-topic').addEventListener('click', function() {
+        removeTopicField(this);
+    });
+}
+
+function removeTopicField(button) {
+    const repeaterItems = document.querySelectorAll('.repeater-item');
+    if (repeaterItems.length > 1) {
+        button.closest('.repeater-item').remove();
+        reindexTopics();
     } else {
-        configInput.classList.remove('is-invalid', 'is-valid');
-        return true;
+        showNotification('At least one topic is required', 'error');
     }
+}
+
+function reindexTopics() {
+    const topicInputs = document.querySelectorAll('input[name^="topics["]');
+    topicInputs.forEach((input, index) => {
+        input.name = `topics[${index}]`;
+    });
+    topicIndex = topicInputs.length;
 }
 
 // Initialize form interactions
 document.addEventListener('DOMContentLoaded', function() {
-    // Validate configuration on input
-    const configTextarea = document.querySelector('textarea[name="configuration"]');
-    if (configTextarea) {
-        configTextarea.addEventListener('input', validateConfiguration);
-    }
+    // Add topic button
+    document.getElementById('add-topic').addEventListener('click', addTopicField);
+    
+    // Remove topic buttons
+    document.querySelectorAll('.remove-topic').forEach(button => {
+        button.addEventListener('click', function() {
+            removeTopicField(this);
+        });
+    });
 });
 </script>
-@endpush
+@endsection
 
 @section('content')
     <div class="content">
@@ -171,48 +202,57 @@ document.addEventListener('DOMContentLoaded', function() {
                                     @enderror
                                 </div>
 
+                                <!-- MQTT Topics (Repeater) -->
                                 <div class="col-12 mb-3">
                                     <label class="form-label">MQTT Topics</label>
-                                    @php
-                                        $topicsString = '';
-                                        if ($device->topics && is_array($device->topics)) {
-                                            $topicsString = implode(', ', $device->topics);
-                                        }
-                                    @endphp
-                                    <input type="text" name="topics" class="form-control @error('topics') is-invalid @enderror" 
-                                           placeholder="topic1, topic2, topic3" value="{{ old('topics', $topicsString) }}">
-                                    <small class="form-text text-muted">Comma-separated list of MQTT topics this device subscribes to or publishes on</small>
+                                    <div class="repeater" id="topics-repeater">
+                                        @if($device->topics && is_array($device->topics) && count($device->topics) > 0)
+                                            @foreach($device->topics as $index => $topic)
+                                                <div class="repeater-item mb-3" style="border: 1px solid #ddd; border-radius: 0.375rem; background-color: #f8f9fa; padding: 1rem;">
+                                                    <div class="d-flex gap-3 align-items-center">
+                                                        <div class="flex-fill">
+                                                            <input type="text" name="topics[{{ $index }}]" class="form-control" placeholder="Enter MQTT topic (e.g., sensors/temperature)" value="{{ old('topics.'.$index, $topic) }}">
+                                                        </div>
+                                                        <div style="min-width: 100px;">
+                                                            <button type="button" class="btn btn-danger btn-sm remove-topic">
+                                                                <i class="ph-trash"></i> Remove
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        @else
+                                            <div class="repeater-item mb-3" style="border: 1px solid #ddd; border-radius: 0.375rem; background-color: #f8f9fa; padding: 1rem;">
+                                                <div class="d-flex gap-3 align-items-center">
+                                                    <div class="flex-fill">
+                                                        <input type="text" name="topics[0]" class="form-control" placeholder="Enter MQTT topic (e.g., sensors/temperature)">
+                                                    </div>
+                                                    <div style="min-width: 100px;">
+                                                        <button type="button" class="btn btn-danger btn-sm remove-topic">
+                                                            <i class="ph-trash"></i> Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                    <button type="button" class="btn btn-success btn-sm" id="add-topic">
+                                        <i class="ph-plus"></i> Add Topic
+                                    </button>
+                                    <small class="form-text text-muted d-block mt-2">Add MQTT topics this device subscribes to or publishes on</small>
                                     @error('topics')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
                             </div>
 
-                            <!-- Location Settings -->
+                            <!-- Device Settings -->
                             <div class="row mb-4">
                                 <div class="col-12">
-                                    <h6 class="fw-semibold">Location Settings</h6>
+                                    <h6 class="fw-semibold">Device Settings</h6>
                                     <hr class="my-2">
                                 </div>
                                 
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Latitude</label>
-                                    <input type="number" name="location_lat" class="form-control @error('location_lat') is-invalid @enderror" 
-                                           placeholder="37.9755" value="{{ old('location_lat', $device->getLatitude()) }}" step="any" min="-90" max="90">
-                                    @error('location_lat')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Longitude</label>
-                                    <input type="number" name="location_lng" class="form-control @error('location_lng') is-invalid @enderror" 
-                                           placeholder="23.7348" value="{{ old('location_lng', $device->getLongitude()) }}" step="any" min="-180" max="180">
-                                    @error('location_lng')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Installation Date</label>
                                     <input type="date" name="installed_at" class="form-control @error('installed_at') is-invalid @enderror" 
@@ -230,30 +270,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                             Device is Active
                                         </label>
                                     </div>
-                                </div>
-                            </div>
-
-                            <!-- Configuration -->
-                            <div class="row mb-4">
-                                <div class="col-12">
-                                    <h6 class="fw-semibold">Configuration</h6>
-                                    <hr class="my-2">
-                                </div>
-                                
-                                <div class="col-12 mb-3">
-                                    <label class="form-label">Device Configuration</label>
-                                    @php
-                                        $configString = '';
-                                        if ($device->configuration) {
-                                            $configString = is_array($device->configuration) ? json_encode($device->configuration, JSON_PRETTY_PRINT) : $device->configuration;
-                                        }
-                                    @endphp
-                                    <textarea name="configuration" class="form-control @error('configuration') is-invalid @enderror" 
-                                              rows="4" placeholder='{"sampling_rate": 60, "threshold": 25.0, "units": "celsius"}'>{{ old('configuration', $configString) }}</textarea>
-                                    <small class="form-text text-muted">JSON configuration for device-specific settings</small>
-                                    @error('configuration')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
                                 </div>
                             </div>
 
