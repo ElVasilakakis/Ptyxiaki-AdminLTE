@@ -233,6 +233,7 @@ class MQTTBrokersController extends Controller
 
     private function performMqttConnectionTest(MqttBroker $broker)
     {
+        $connection = null;
         try {
             // Basic connection validation
             $host = $broker->host;
@@ -249,12 +250,24 @@ class MQTTBrokersController extends Controller
                 ];
             }
 
-            fclose($connection);
+            // Set socket timeout for read/write operations
+            stream_set_timeout($connection, $timeout);
+            
+            // Send a simple test to verify the connection is working
+            // For MQTT, we can send a basic ping or just verify the socket is writable
+            $testWrite = @fwrite($connection, "\x00");
+            
+            if ($testWrite === false) {
+                return [
+                    'success' => false,
+                    'message' => "Connection established but socket is not writable"
+                ];
+            }
 
             // If we reach here, basic connection is successful
             return [
                 'success' => true,
-                'message' => "Successfully connected to {$host}:{$port}"
+                'message' => "Successfully connected to {$host}:{$port} - Socket test passed"
             ];
 
         } catch (\Exception $e) {
@@ -262,6 +275,11 @@ class MQTTBrokersController extends Controller
                 'success' => false,
                 'message' => "Connection test failed: " . $e->getMessage()
             ];
+        } finally {
+            // Always ensure the connection is properly closed
+            if ($connection && is_resource($connection)) {
+                @fclose($connection);
+            }
         }
     }
 
