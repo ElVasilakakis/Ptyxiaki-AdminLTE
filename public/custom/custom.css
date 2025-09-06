@@ -1,0 +1,9 @@
+.datatable-header, .datatable-footer{
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 25px;
+}
+
+.datatable-scroll {
+    padding: 15px 0px;
+}
