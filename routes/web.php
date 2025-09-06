@@ -48,6 +48,14 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
 
     Route::group(['prefix' => 'devices'], function () {
         Route::get('/', [DevicesController::class, 'index'])->name('app.devices.index');
+        Route::get('/create', [DevicesController::class, 'create'])->name('app.devices.create');
+        Route::post('/', [DevicesController::class, 'store'])->name('app.devices.store');
+        Route::get('/{device}', [DevicesController::class, 'show'])->name('app.devices.show');
+        Route::get('/{device}/edit', [DevicesController::class, 'edit'])->name('app.devices.edit');
+        Route::put('/{device}', [DevicesController::class, 'update'])->name('app.devices.update');
+        Route::patch('/{device}/toggle-status', [DevicesController::class, 'toggleStatus'])->name('app.devices.toggle-status');
+        Route::patch('/{device}/update-status', [DevicesController::class, 'updateStatus'])->name('app.devices.update-status');
+        Route::delete('/{device}', [DevicesController::class, 'destroy'])->name('app.devices.destroy');
     });
 
     Route::group(['prefix' => 'sensors'], function () {

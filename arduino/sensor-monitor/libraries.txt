@@ -1,0 +1,9 @@
+WiFi
+WebServer
+ArduinoJson
+DHT sensor library
+Preferences
+PubSubClient
+MQTT.h
+TinyGPSPlus
+SoftwareSerial.h
