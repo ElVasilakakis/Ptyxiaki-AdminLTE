@@ -60,6 +60,7 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
 
     Route::group(['prefix' => 'sensors'], function () {
         Route::get('/', [SensorsController::class, 'index'])->name('app.sensors.index');
+        Route::post('/store', [SensorsController::class, 'store'])->name('app.sensors.store');
     });
 
     Route::group(['prefix' => 'mqttbrokers'], function () {

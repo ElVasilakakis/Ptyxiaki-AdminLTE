@@ -241,6 +241,21 @@ function updateTopicIndexes() {
                                 </div>
 
                                 <div class="col-md-6 mb-3">
+                                    <label class="form-label">Protocol <span class="text-danger">*</span></label>
+                                    <select name="protocol" class="form-select @error('protocol') is-invalid @enderror" required>
+                                        <option value="">Select protocol</option>
+                                        <option value="mqtt" {{ old('protocol') == 'mqtt' ? 'selected' : '' }}>MQTT</option>
+                                        <option value="mqtts" {{ old('protocol') == 'mqtts' ? 'selected' : '' }}>MQTT over SSL/TLS</option>
+                                        <option value="ws" {{ old('protocol', 'ws') == 'ws' ? 'selected' : '' }}>WebSocket</option>
+                                        <option value="wss" {{ old('protocol') == 'wss' ? 'selected' : '' }}>WebSocket Secure</option>
+                                    </select>
+                                    <small class="form-text text-muted">Communication protocol for MQTT connection</small>
+                                    @error('protocol')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <div class="col-md-6 mb-3">
                                     <label class="form-label">Land <span class="text-danger">*</span></label>
                                     <select name="land_id" class="form-select @error('land_id') is-invalid @enderror" required>
                                         <option value="">Select land</option>

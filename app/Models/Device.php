@@ -23,6 +23,7 @@ class Device extends Model
         'last_seen_at',
         'installed_at',
         'topics',
+        'protocol',
         'configuration',
         'description',
         'is_active',
