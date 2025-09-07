@@ -333,25 +333,39 @@
             
             switch (protocol) {
                 case 'ws':
+                    port = device.ws_port || 8083;
+                    const wsPath = mqttBroker.path || '/mqtt';
+                    brokerUrl = `ws://${mqttBroker.host}:${port}${wsPath}`;
+                    break;
                 case 'wss':
-                    port = mqttBroker.websocket_port || 8083;
-                    const path = mqttBroker.path || '/mqtt';
-                    brokerUrl = `${protocol}://${mqttBroker.host}:${port}${path}`;
+                    port = device.wss_port || 8084;
+                    const wssPath = mqttBroker.path || '/mqtt';
+                    brokerUrl = `wss://${mqttBroker.host}:${port}${wssPath}`;
                     break;
                 case 'mqtt':
-                    console.warn('⚠️ Native MQTT protocol not supported in browsers. Using WebSocket instead.');
-                    port = mqttBroker.websocket_port || 8083;
+                    const mqttPort = device.mqtt_port || 1883;
+                    const wsPort = device.ws_port || 8083;
                     const mqttPath = mqttBroker.path || '/mqtt';
-                    brokerUrl = `ws://${mqttBroker.host}:${port}${mqttPath}`;
+                    const intendedUrl = `mqtt://${mqttBroker.host}:${mqttPort}${mqttPath}`;
+                    brokerUrl = `ws://${mqttBroker.host}:${wsPort}${mqttPath}`;
+                    console.warn('⚠️ IMPORTANT: Web browsers cannot use native MQTT protocol due to security restrictions.');
+                    console.log(`📋 Your selected protocol: mqtt://${mqttBroker.host}:${mqttPort}${mqttPath}`);
+                    console.log(`🔧 Browser-compatible URL: ${brokerUrl} (using WebSocket port ${wsPort})`);
+                    console.log('💡 For native MQTT connections, use a desktop application or server-side code.');
                     break;
                 case 'mqtts':
-                    console.warn('⚠️ Native MQTTS protocol not supported in browsers. Using secure WebSocket instead.');
-                    port = mqttBroker.ssl_port || 8883;
+                    const mqttsPort = device.mqtts_port || 8883;
+                    const wssPort = device.wss_port || 8084;
                     const mqttsPath = mqttBroker.path || '/mqtt';
-                    brokerUrl = `wss://${mqttBroker.host}:${port}${mqttsPath}`;
+                    const intendedSecureUrl = `mqtts://${mqttBroker.host}:${mqttsPort}${mqttsPath}`;
+                    brokerUrl = `wss://${mqttBroker.host}:${wssPort}${mqttsPath}`;
+                    console.warn('⚠️ IMPORTANT: Web browsers cannot use native MQTTS protocol due to security restrictions.');
+                    console.log(`📋 Your selected protocol: mqtts://${mqttBroker.host}:${mqttsPort}${mqttsPath}`);
+                    console.log(`🔧 Browser-compatible URL: ${brokerUrl} (using secure WebSocket port ${wssPort})`);
+                    console.log('💡 For native MQTTS connections, use a desktop application or server-side code.');
                     break;
                 default:
-                    port = mqttBroker.websocket_port || 8083;
+                    port = device.ws_port || 8083;
                     const defaultPath = mqttBroker.path || '/mqtt';
                     brokerUrl = `ws://${mqttBroker.host}:${port}${defaultPath}`;
             }

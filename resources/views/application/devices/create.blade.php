@@ -254,6 +254,55 @@ function updateTopicIndexes() {
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
+                            </div>
+
+                            <!-- Protocol Ports -->
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <h6 class="fw-semibold">Protocol Ports</h6>
+                                    <hr class="my-2">
+                                    <small class="form-text text-muted">Configure ports for each protocol type</small>
+                                </div>
+                                
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">MQTT Port</label>
+                                    <input type="number" name="mqtt_port" class="form-control @error('mqtt_port') is-invalid @enderror" 
+                                           placeholder="1883" value="{{ old('mqtt_port', 1883) }}" min="1" max="65535">
+                                    <small class="form-text text-muted">Standard MQTT port (default: 1883)</small>
+                                    @error('mqtt_port')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">MQTTS Port</label>
+                                    <input type="number" name="mqtts_port" class="form-control @error('mqtts_port') is-invalid @enderror" 
+                                           placeholder="8883" value="{{ old('mqtts_port', 8883) }}" min="1" max="65535">
+                                    <small class="form-text text-muted">MQTT over SSL/TLS port (default: 8883)</small>
+                                    @error('mqtts_port')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">WebSocket Port</label>
+                                    <input type="number" name="ws_port" class="form-control @error('ws_port') is-invalid @enderror" 
+                                           placeholder="8083" value="{{ old('ws_port', 8083) }}" min="1" max="65535">
+                                    <small class="form-text text-muted">WebSocket port (default: 8083)</small>
+                                    @error('ws_port')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">WebSocket Secure Port</label>
+                                    <input type="number" name="wss_port" class="form-control @error('wss_port') is-invalid @enderror" 
+                                           placeholder="8084" value="{{ old('wss_port', 8084) }}" min="1" max="65535">
+                                    <small class="form-text text-muted">WebSocket Secure port (default: 8084)</small>
+                                    @error('wss_port')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
 
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Land <span class="text-danger">*</span></label>
