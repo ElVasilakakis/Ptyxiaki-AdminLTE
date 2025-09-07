@@ -60,6 +60,8 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
 
     Route::group(['prefix' => 'sensors'], function () {
         Route::get('/', [SensorsController::class, 'index'])->name('app.sensors.index');
+        Route::get('/{sensor}/edit', [SensorsController::class, 'edit'])->name('app.sensors.edit');
+        Route::put('/{sensor}', [SensorsController::class, 'update'])->name('app.sensors.update');
         Route::post('/store', [SensorsController::class, 'store'])->name('app.sensors.store');
     });
 

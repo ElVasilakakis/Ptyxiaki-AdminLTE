@@ -94,6 +94,39 @@
             color: #6b7280;
             border: 1px solid #d1d5db;
         }
+
+        /* Sensor alert styles */
+        .sensor-alert {
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sensor-alert.high {
+            background-color: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .sensor-alert.low {
+            background-color: #fef3c7;
+            color: #d97706;
+            border: 1px solid #fed7aa;
+        }
+
+        .sensor-card.alert-high {
+            border-color: #dc2626;
+            background: #fef2f2;
+        }
+
+        .sensor-card.alert-low {
+            border-color: #d97706;
+            background: #fffbeb;
+        }
     </style>
 @endsection
 
@@ -241,6 +274,12 @@
             sensorCard.id = `sensor-${sensor.sensor_type}`;
             sensorCard.className = 'sensor-card col-md-6 col-lg-3';
             
+            // Check for alert status
+            const alertStatus = checkSensorAlert(sensor);
+            if (alertStatus !== 'normal') {
+                sensorCard.classList.add(`alert-${alertStatus}`);
+            }
+            
             let displayValue = sensor.value;
             if (typeof sensor.value === 'object') {
                 displayValue = JSON.stringify(sensor.value);
@@ -252,13 +291,92 @@
                 new Date(sensor.reading_timestamp).toLocaleString() : 
                 'Unknown';
             
+            let alertHtml = '';
+            if (alertStatus !== 'normal') {
+                const alertIcon = alertStatus === 'high' ? 'ph-arrow-up' : 'ph-arrow-down';
+                const alertText = alertStatus === 'high' ? 'Above threshold' : 'Below threshold';
+                alertHtml = `<div class="sensor-alert ${alertStatus}">
+                    <i class="${alertIcon}"></i>
+                    <span>${alertText}</span>
+                </div>`;
+            }
+            
             sensorCard.innerHTML = `
                 <div class="sensor-type">${sensor.sensor_type}</div>
                 <div class="sensor-value">${displayValue}</div>
                 <div class="last-update">Last reading: ${lastUpdate}</div>
+                ${alertHtml}
             `;
             
             sensorContainer.appendChild(sensorCard);
+        }
+
+        // Check sensor alert status
+        function checkSensorAlert(sensor) {
+            if (!sensor.alert_enabled || sensor.value === null || !sensor.alert_threshold_min && !sensor.alert_threshold_max) {
+                return 'normal';
+            }
+
+            // Only check thresholds for numeric values
+            if (typeof sensor.value !== 'number') {
+                return 'normal';
+            }
+
+            const numericValue = parseFloat(sensor.value);
+
+            if (sensor.alert_threshold_min !== null && numericValue < sensor.alert_threshold_min) {
+                return 'low';
+            }
+
+            if (sensor.alert_threshold_max !== null && numericValue > sensor.alert_threshold_max) {
+                return 'high';
+            }
+
+            return 'normal';
+        }
+
+        // Update sensor alerts display
+        function updateSensorAlertsDisplay() {
+            const alertsContainer = document.getElementById('sensor-alerts-container');
+            if (!alertsContainer) return;
+
+            // Get all sensors with alerts
+            const sensorsWithAlerts = previousSensors.filter(sensor => {
+                return sensor.alert_enabled && checkSensorAlert(sensor) !== 'normal';
+            });
+
+            if (sensorsWithAlerts.length === 0) {
+                alertsContainer.innerHTML = '<div class="col-12"><p class="text-muted">No active sensor alerts</p></div>';
+                return;
+            }
+
+            alertsContainer.innerHTML = '';
+            sensorsWithAlerts.forEach(sensor => {
+                const alertStatus = checkSensorAlert(sensor);
+                const alertCard = document.createElement('div');
+                alertCard.className = 'col-md-6 col-lg-4 mb-3';
+                
+                const alertClass = alertStatus === 'high' ? 'danger' : 'warning';
+                const alertIcon = alertStatus === 'high' ? 'ph-arrow-up' : 'ph-arrow-down';
+                const alertText = alertStatus === 'high' ? 'High Alert' : 'Low Alert';
+                
+                alertCard.innerHTML = `
+                    <div class="alert alert-${alertClass} mb-0">
+                        <div class="d-flex align-items-center">
+                            <i class="${alertIcon} me-2"></i>
+                            <div>
+                                <strong>${sensor.sensor_type}</strong> - ${alertText}
+                                <br>
+                                <small>Current: ${sensor.value}${sensor.unit ? ' ' + sensor.unit : ''}</small>
+                                <br>
+                                <small>Threshold: ${alertStatus === 'high' ? 'Max ' + sensor.alert_threshold_max : 'Min ' + sensor.alert_threshold_min}${sensor.unit ? ' ' + sensor.unit : ''}</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                alertsContainer.appendChild(alertCard);
+            });
         }
 
 
@@ -692,6 +810,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             initMap();
             loadPreviousSensorData();
+            updateSensorAlertsDisplay();
             updateMqttStatus('disconnected');
 
             // Connect button event
@@ -798,6 +917,46 @@
                                 <div id="map"></div>
                             </div>
                         </div>
+
+                        <!-- Sensor Alerts -->
+                        @php
+                            $alertSensors = $device->sensors->filter(function($sensor) {
+                                return $sensor->alert_enabled && $sensor->getAlertStatus() !== 'normal';
+                            });
+                        @endphp
+                        @if ($alertSensors->count() > 0)
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <h6 class="fw-semibold mb-3">
+                                        <i class="ph-warning-circle me-2 text-danger"></i>Sensor Alerts
+                                    </h6>
+                                    <div id="sensor-alerts-container" class="row">
+                                        @foreach ($alertSensors as $sensor)
+                                            @php
+                                                $alertStatus = $sensor->getAlertStatus();
+                                                $alertClass = $alertStatus === 'high' ? 'danger' : 'warning';
+                                                $alertIcon = $alertStatus === 'high' ? 'ph-arrow-up' : 'ph-arrow-down';
+                                                $alertText = $alertStatus === 'high' ? 'High Alert' : 'Low Alert';
+                                            @endphp
+                                            <div class="col-md-6 col-lg-4 mb-3">
+                                                <div class="alert alert-{{ $alertClass }} mb-0">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="{{ $alertIcon }} me-2"></i>
+                                                        <div>
+                                                            <strong>{{ $sensor->sensor_type }}</strong> - {{ $alertText }}
+                                                            <br>
+                                                            <small>Current: {{ $sensor->getFormattedValue() }}</small>
+                                                            <br>
+                                                            <small>Threshold: {{ $alertStatus === 'high' ? 'Max ' . $sensor->alert_threshold_max : 'Min ' . $sensor->alert_threshold_min }}{{ $sensor->unit ? ' ' . $sensor->unit : '' }}</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
 
                         <!-- Sensors -->
                         <div class="row mb-4">

@@ -13,7 +13,75 @@ class SensorsController extends Controller
 {
     public function index()
     {
-        return view('application.sensors.index');
+        $sensors = Sensor::forUser(Auth::id())
+            ->with(['device', 'device.land'])
+            ->latest('reading_timestamp')
+            ->get();
+        
+        return view('application.sensors.index', compact('sensors'));
+    }
+
+    public function edit(Sensor $sensor)
+    {
+        // Ensure user can only edit their own sensors
+        if ($sensor->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        return view('application.sensors.edit', compact('sensor'));
+    }
+
+    public function update(Request $request, Sensor $sensor)
+    {
+        // Ensure user can only update their own sensors
+        if ($sensor->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'sensor_name' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:1000',
+            'unit' => 'nullable|string|max:50',
+            'enabled' => 'boolean',
+            'alert_enabled' => 'boolean',
+            'alert_threshold_min' => 'nullable|numeric',
+            'alert_threshold_max' => 'nullable|numeric',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        // Validate that min threshold is less than max threshold
+        if ($request->alert_threshold_min !== null && $request->alert_threshold_max !== null) {
+            if ((float)$request->alert_threshold_min >= (float)$request->alert_threshold_max) {
+                return redirect()->back()
+                    ->withErrors(['alert_threshold_min' => 'Minimum threshold must be less than maximum threshold'])
+                    ->withInput();
+            }
+        }
+
+        try {
+            $sensor->update([
+                'sensor_name' => $request->sensor_name,
+                'description' => $request->description,
+                'unit' => $request->unit,
+                'enabled' => $request->has('enabled'),
+                'alert_enabled' => $request->has('alert_enabled'),
+                'alert_threshold_min' => $request->alert_threshold_min,
+                'alert_threshold_max' => $request->alert_threshold_max,
+            ]);
+
+            return redirect()->route('app.sensors.index')
+                ->with('success', 'Sensor updated successfully!');
+
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->withErrors(['error' => 'Failed to update sensor: ' . $e->getMessage()])
+                ->withInput();
+        }
     }
 
     public function store(Request $request)
