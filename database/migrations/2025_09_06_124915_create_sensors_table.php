@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('device_id')->constrained('devices')->onDelete('cascade');
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->string('sensor_type');
-            $table->string('sensor_name');
+            $table->string('sensor_name')->nullable();
             $table->text('description')->nullable();
             $table->string('location')->nullable();
             $table->string('unit')->nullable();

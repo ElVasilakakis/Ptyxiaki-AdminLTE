@@ -205,6 +205,16 @@ function showNotification(message, type) {
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Path</label>
+                                    <input type="text" name="path" class="form-control @error('path') is-invalid @enderror" 
+                                           placeholder="/mqtt" value="{{ old('path', $mqttbroker->path ?? '/mqtt') }}">
+                                    <small class="form-text text-muted">WebSocket path (e.g., /mqtt)</small>
+                                    @error('path')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
                             </div>
 
                             <!-- Authentication -->

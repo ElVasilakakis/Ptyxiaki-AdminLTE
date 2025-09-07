@@ -53,9 +53,10 @@ class SensorsController extends Controller
                     'sensor_type' => $request->sensor_type,
                 ],
                 [
+                    'user_id' => Auth::id(),
                     'value' => $request->value,
                     'unit' => $request->unit,
-                    'last_reading_at' => now(),
+                    'reading_timestamp' => now(),
                 ]
             );
 

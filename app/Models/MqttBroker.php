@@ -18,6 +18,7 @@ class MqttBroker extends Model
         'host',
         'port',
         'websocket_port',
+        'path',
         'username',
         'password',
         'use_ssl',

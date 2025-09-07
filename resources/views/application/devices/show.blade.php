@@ -84,6 +84,7 @@
         let mqttClient;
         let isConnected = false;
         let scanInterval;
+        let isPaused = false;
 
         // Device data
         const device = @json($device);
@@ -148,6 +149,7 @@
         function updateMqttStatus(status, message = '') {
             const statusElement = document.getElementById('mqtt-status');
             const connectBtn = document.getElementById('connect-btn');
+            const pauseBtn = document.getElementById('pause-btn');
 
             statusElement.className = `mqtt-status ${status}`;
 
@@ -156,18 +158,42 @@
                     statusElement.textContent = 'Disconnected' + (message ? ': ' + message : '');
                     connectBtn.textContent = 'Connect';
                     connectBtn.disabled = false;
+                    pauseBtn.style.display = 'none';
                     break;
                 case 'connecting':
                     statusElement.textContent = 'Connecting...';
                     connectBtn.textContent = 'Connecting...';
                     connectBtn.disabled = true;
+                    pauseBtn.style.display = 'none';
                     break;
                 case 'connected':
-                    statusElement.textContent = 'Connected to MQTT Broker';
+                    statusElement.textContent = isPaused ? 'Connected (Paused)' : 'Connected to MQTT Broker';
                     connectBtn.textContent = 'Disconnect';
                     connectBtn.disabled = false;
+                    pauseBtn.style.display = 'inline-block';
                     break;
             }
+        }
+
+        // Toggle pause/resume functionality
+        function togglePause() {
+            const pauseBtn = document.getElementById('pause-btn');
+            
+            isPaused = !isPaused;
+            
+            if (isPaused) {
+                pauseBtn.innerHTML = '<i class="ph-play me-2"></i>Resume';
+                pauseBtn.classList.remove('btn-warning');
+                pauseBtn.classList.add('btn-success');
+                console.log('Data processing paused');
+            } else {
+                pauseBtn.innerHTML = '<i class="ph-pause me-2"></i>Pause';
+                pauseBtn.classList.remove('btn-success');
+                pauseBtn.classList.add('btn-warning');
+                console.log('Data processing resumed');
+            }
+            
+            updateMqttStatus('connected');
         }
 
         // Connect to MQTT broker
@@ -189,7 +215,34 @@
 
             // Build MQTT broker URL using device protocol
             const protocol = device.protocol || 'ws'; // Default to 'ws' if not set
-            const brokerUrl = `${protocol}://${mqttBroker.host}:${mqttBroker.port}`;
+            
+            // Determine the correct port based on protocol
+            let port;
+            switch (protocol) {
+                case 'ws':
+                case 'wss':
+                    // Use websocket_port for WebSocket connections
+                    port = mqttBroker.websocket_port || 8083; // Default WebSocket port
+                    break;
+                case 'mqtt':
+                case 'mqtts':
+                    // Use regular port for standard MQTT connections
+                    port = mqttBroker.use_ssl && mqttBroker.ssl_port ? mqttBroker.ssl_port : mqttBroker.port;
+                    break;
+                default:
+                    port = mqttBroker.port;
+            }
+            
+            // Build the broker URL with path for WebSocket connections
+            let brokerUrl;
+            if (protocol === 'ws' || protocol === 'wss') {
+                const path = mqttBroker.path || '/mqtt'; // Default path for WebSocket
+                brokerUrl = `${protocol}://${mqttBroker.host}:${port}${path}`;
+            } else {
+                brokerUrl = `${protocol}://${mqttBroker.host}:${port}`;
+            }
+            
+            console.log('Connecting to MQTT broker:', brokerUrl);
 
             // MQTT connection options
             const options = {
@@ -260,6 +313,12 @@
 
         // Handle incoming MQTT messages
         function handleMqttMessage(topic, messageStr) {
+            // Skip processing if paused
+            if (isPaused) {
+                console.log('Message received but processing is paused:', topic);
+                return;
+            }
+
             try {
                 const message = JSON.parse(messageStr);
 
@@ -395,6 +454,9 @@
 
             // Connect button event
             document.getElementById('connect-btn').addEventListener('click', connectMqtt);
+            
+            // Pause button event
+            document.getElementById('pause-btn').addEventListener('click', togglePause);
         });
 
         // Cleanup on page unload
@@ -418,6 +480,9 @@
                         <h6 class="mb-0">Device: {{ $device->name }}</h6>
                         <div class="d-flex align-items-center gap-3">
                             <div id="mqtt-status" class="mqtt-status disconnected">Disconnected</div>
+                            <button type="button" id="pause-btn" class="btn btn-warning" style="display: none;">
+                                <i class="ph-pause me-2"></i>Pause
+                            </button>
                             <button type="button" id="connect-btn" class="btn btn-primary">
                                 Connect
                             </button>
