@@ -108,7 +108,32 @@ class DevicesController extends Controller
             abort(403);
         }
 
-        $device->load(['mqttBroker', 'land', 'sensors']);
+        // Load relationships and get latest sensor readings
+        $device->load([
+            'mqttBroker', 
+            'land', 
+            'sensors' => function($query) {
+                $query->orderBy('reading_timestamp', 'desc');
+            }
+        ]);
+
+        // Get the latest location sensor data
+        $latestLocation = $device->sensors()
+            ->where('sensor_type', 'location')
+            ->orderBy('reading_timestamp', 'desc')
+            ->first();
+
+        // If we have location data, set it on the device
+        if ($latestLocation && $latestLocation->value) {
+            $locationData = is_array($latestLocation->value) ? $latestLocation->value : json_decode($latestLocation->value, true);
+            if ($locationData && isset($locationData['latitude']) && isset($locationData['longitude'])) {
+                $device->current_location = [
+                    'type' => 'Point',
+                    'coordinates' => [$locationData['longitude'], $locationData['latitude']]
+                ];
+            }
+        }
+
         return view('application.devices.show', compact('device'));
     }
 

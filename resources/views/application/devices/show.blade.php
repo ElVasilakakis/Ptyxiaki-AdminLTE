@@ -25,7 +25,6 @@
             border-radius: 0.375rem;
             font-weight: 500;
             display: inline-block;
-            margin-bottom: 1rem;
         }
 
         .mqtt-status.disconnected {
@@ -89,8 +88,9 @@
         // Device data
         const device = @json($device);
         const mqttBroker = @json($device->mqttBroker);
+        const landData = @json($device->land);
+        const previousSensors = @json($device->sensors);
 
-        // Initialize map
         // Initialize map
         function initMap() {
             // Wait for DOM to be ready
@@ -106,8 +106,12 @@
                 let defaultLng = 21.8243;
                 let defaultZoom = 6;
 
-                // Check if device has location from sensors
-                if (device.location && device.location.coordinates) {
+                // Check if device has current location from previous data
+                if (device.current_location && device.current_location.coordinates) {
+                    defaultLat = device.current_location.coordinates[1];
+                    defaultLng = device.current_location.coordinates[0];
+                    defaultZoom = 13;
+                } else if (device.location && device.location.coordinates) {
                     defaultLat = device.location.coordinates[1];
                     defaultLng = device.location.coordinates[0];
                     defaultZoom = 13;
@@ -128,20 +132,107 @@
                     attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 }).addTo(map);
 
+                // Add land GeoJSON polygon if available
+                if (landData && landData.geojson) {
+                    try {
+                        const landGeoJSON = typeof landData.geojson === 'string' ? JSON.parse(landData.geojson) : landData.geojson;
+                        L.geoJSON(landGeoJSON, {
+                            style: {
+                                color: '#3388ff',
+                                weight: 2,
+                                opacity: 0.8,
+                                fillColor: '#3388ff',
+                                fillOpacity: 0.2
+                            }
+                        }).addTo(map).bindPopup(`<b>${landData.land_name}</b><br>Area: ${landData.area || 'Unknown'} hectares`);
+                        console.log('Land GeoJSON added to map');
+                    } catch (error) {
+                        console.error('Error adding land GeoJSON:', error);
+                    }
+                }
+
+                // Add device marker if location exists
+                if (device.current_location && device.current_location.coordinates) {
+                    const lat = device.current_location.coordinates[1];
+                    const lng = device.current_location.coordinates[0];
+                    deviceMarker = L.marker([lat, lng])
+                        .addTo(map)
+                        .bindPopup(`<b>${device.name}</b><br>Device ID: ${device.device_id}<br>Last known location`);
+                } else if (device.location && device.location.coordinates) {
+                    const lat = device.location.coordinates[1];
+                    const lng = device.location.coordinates[0];
+                    deviceMarker = L.marker([lat, lng])
+                        .addTo(map)
+                        .bindPopup(`<b>${device.name}</b><br>Device ID: ${device.device_id}`);
+                }
+
                 // Force map resize after initialization
                 setTimeout(function() {
                     map.invalidateSize();
                 }, 100);
 
-                // Add device marker if location exists
-                if (device.location && device.location.coordinates) {
-                    deviceMarker = L.marker([defaultLat, defaultLng])
-                        .addTo(map)
-                        .bindPopup(`<b>${device.name}</b><br>Device ID: ${device.device_id}`);
-                }
-
                 console.log('Map initialized successfully');
             }, 100);
+        }
+
+        // Load previous sensor data on page load
+        function loadPreviousSensorData() {
+            if (previousSensors && previousSensors.length > 0) {
+                const sensorContainer = document.getElementById('sensors-container');
+                
+                // Clear the default message
+                sensorContainer.innerHTML = '';
+                
+                // Group sensors by type and get the latest reading for each type
+                const latestSensors = {};
+                previousSensors.forEach(sensor => {
+                    if (!latestSensors[sensor.sensor_type] || 
+                        new Date(sensor.reading_timestamp) > new Date(latestSensors[sensor.sensor_type].reading_timestamp)) {
+                        latestSensors[sensor.sensor_type] = sensor;
+                    }
+                });
+
+                // Display each sensor type
+                Object.values(latestSensors).forEach(sensor => {
+                    if (sensor.sensor_type !== 'location') { // Skip location sensors as they're shown on map
+                        displayPreviousSensorValue(sensor);
+                    }
+                });
+
+                if (Object.keys(latestSensors).length === 0 || (Object.keys(latestSensors).length === 1 && latestSensors['location'])) {
+                    sensorContainer.innerHTML = '<div class="col-12"><p class="text-muted">No previous sensor data available</p></div>';
+                }
+            } else {
+                document.getElementById('sensors-container').innerHTML = '<div class="col-12"><p class="text-muted">No previous sensor data available</p></div>';
+            }
+        }
+
+        // Display previous sensor value
+        function displayPreviousSensorValue(sensor) {
+            const sensorContainer = document.getElementById('sensors-container');
+            
+            const sensorCard = document.createElement('div');
+            sensorCard.id = `sensor-${sensor.sensor_type}`;
+            sensorCard.className = 'sensor-card col-md-6 col-lg-3';
+            
+            let displayValue = sensor.value;
+            if (typeof sensor.value === 'object') {
+                displayValue = JSON.stringify(sensor.value);
+            } else if (typeof sensor.value === 'number') {
+                displayValue = sensor.value + (sensor.unit ? ` ${sensor.unit}` : '');
+            }
+            
+            const lastUpdate = sensor.reading_timestamp ? 
+                new Date(sensor.reading_timestamp).toLocaleString() : 
+                'Unknown';
+            
+            sensorCard.innerHTML = `
+                <div class="sensor-type">${sensor.sensor_type}</div>
+                <div class="sensor-value">${displayValue}</div>
+                <div class="last-update">Last reading: ${lastUpdate}</div>
+            `;
+            
+            sensorContainer.appendChild(sensorCard);
         }
 
 
@@ -450,6 +541,7 @@
         // Initialize everything when page loads
         document.addEventListener('DOMContentLoaded', function() {
             initMap();
+            loadPreviousSensorData();
             updateMqttStatus('disconnected');
 
             // Connect button event
