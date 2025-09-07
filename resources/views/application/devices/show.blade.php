@@ -67,6 +67,33 @@
             font-size: 0.75rem;
             color: #9ca3af;
         }
+
+        /* Location status styles */
+        .location-status {
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+
+        .location-status.inside {
+            background-color: #dcfce7;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+        }
+
+        .location-status.outside {
+            background-color: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .location-status.unknown {
+            background-color: #f3f4f6;
+            color: #6b7280;
+            border: 1px solid #d1d5db;
+        }
     </style>
 @endsection
 
@@ -84,6 +111,7 @@
         let isConnected = false;
         let scanInterval;
         let isPaused = false;
+        let landGeoJSONLayer = null;
 
         // Device data
         const device = @json($device);
@@ -136,7 +164,7 @@
                 if (landData && landData.geojson) {
                     try {
                         const landGeoJSON = typeof landData.geojson === 'string' ? JSON.parse(landData.geojson) : landData.geojson;
-                        L.geoJSON(landGeoJSON, {
+                        landGeoJSONLayer = L.geoJSON(landGeoJSON, {
                             style: {
                                 color: '#3388ff',
                                 weight: 2,
@@ -155,15 +183,13 @@
                 if (device.current_location && device.current_location.coordinates) {
                     const lat = device.current_location.coordinates[1];
                     const lng = device.current_location.coordinates[0];
-                    deviceMarker = L.marker([lat, lng])
-                        .addTo(map)
-                        .bindPopup(`<b>${device.name}</b><br>Device ID: ${device.device_id}<br>Last known location`);
+                    addDeviceMarker(lat, lng, 'Last known location');
+                    updateLocationStatus(lat, lng);
                 } else if (device.location && device.location.coordinates) {
                     const lat = device.location.coordinates[1];
                     const lng = device.location.coordinates[0];
-                    deviceMarker = L.marker([lat, lng])
-                        .addTo(map)
-                        .bindPopup(`<b>${device.name}</b><br>Device ID: ${device.device_id}`);
+                    addDeviceMarker(lat, lng, 'Device location');
+                    updateLocationStatus(lat, lng);
                 }
 
                 // Force map resize after initialization
@@ -433,15 +459,11 @@
             } = locationData;
 
             if (latitude && longitude) {
-                // Update or create marker on map
-                if (deviceMarker) {
-                    deviceMarker.setLatLng([latitude, longitude]);
-                } else {
-                    deviceMarker = L.marker([latitude, longitude])
-                        .addTo(map)
-                        .bindPopup(
-                            `<b>${device.name}</b><br>Device ID: ${device.device_id}<br>Status: ${status || 'unknown'}`);
-                }
+                // Update device marker with new location and status
+                addDeviceMarker(latitude, longitude, `Status: ${status || 'unknown'}`);
+                
+                // Update location status display
+                updateLocationStatus(latitude, longitude);
 
                 // Center map on new location
                 map.setView([latitude, longitude], 13);
@@ -459,6 +481,134 @@
                 });
 
                 console.log('Location updated:', latitude, longitude, status);
+            }
+        }
+
+        // Point-in-polygon checking function
+        function isPointInPolygon(point, polygon) {
+            const x = point[0], y = point[1];
+            let inside = false;
+            
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i][0], yi = polygon[i][1];
+                const xj = polygon[j][0], yj = polygon[j][1];
+                
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+                    inside = !inside;
+                }
+            }
+            
+            return inside;
+        }
+
+        // Check if point is inside GeoJSON geometry
+        function isPointInGeoJSON(lat, lng, geoJSON) {
+            const point = [lng, lat]; // GeoJSON uses [longitude, latitude]
+            
+            if (geoJSON.type === 'Polygon') {
+                // For Polygon, coordinates[0] is the exterior ring
+                return isPointInPolygon(point, geoJSON.coordinates[0]);
+            } else if (geoJSON.type === 'MultiPolygon') {
+                // For MultiPolygon, check each polygon
+                for (let polygon of geoJSON.coordinates) {
+                    if (isPointInPolygon(point, polygon[0])) {
+                        return true;
+                    }
+                }
+                return false;
+            } else if (geoJSON.type === 'Feature') {
+                return isPointInGeoJSON(lat, lng, geoJSON.geometry);
+            } else if (geoJSON.type === 'FeatureCollection') {
+                for (let feature of geoJSON.features) {
+                    if (isPointInGeoJSON(lat, lng, feature.geometry)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            
+            return false;
+        }
+
+        // Add device marker with appropriate styling
+        function addDeviceMarker(lat, lng, popupText) {
+            // Determine if device is inside land territory
+            const isInside = checkLocationStatus(lat, lng);
+            
+            // Create custom icon based on location status
+            let iconColor = '#6b7280'; // default gray
+            let iconClass = 'ph-map-pin';
+            
+            if (isInside === true) {
+                iconColor = '#16a34a'; // green for inside
+                iconClass = 'ph-map-pin';
+            } else if (isInside === false) {
+                iconColor = '#dc2626'; // red for outside
+                iconClass = 'ph-warning';
+            }
+            
+            // Create custom HTML marker
+            const customIcon = L.divIcon({
+                html: `<div style="background-color: ${iconColor}; width: 25px; height: 25px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                         <i class="${iconClass}" style="color: white; font-size: 14px;"></i>
+                       </div>`,
+                className: 'custom-div-icon',
+                iconSize: [25, 25],
+                iconAnchor: [12, 12]
+            });
+            
+            if (deviceMarker) {
+                deviceMarker.setLatLng([lat, lng]);
+                deviceMarker.setIcon(customIcon);
+            } else {
+                deviceMarker = L.marker([lat, lng], { icon: customIcon })
+                    .addTo(map)
+                    .bindPopup(`<b>${device.name}</b><br>Device ID: ${device.device_id}<br>${popupText}`);
+            }
+        }
+
+        // Check location status and return boolean
+        function checkLocationStatus(lat, lng) {
+            if (!landData || !landData.geojson) {
+                return null; // unknown
+            }
+            
+            try {
+                const landGeoJSON = typeof landData.geojson === 'string' ? JSON.parse(landData.geojson) : landData.geojson;
+                return isPointInGeoJSON(lat, lng, landGeoJSON);
+            } catch (error) {
+                console.error('Error checking location status:', error);
+                return null;
+            }
+        }
+
+        // Update location status display
+        function updateLocationStatus(lat, lng) {
+            const isInside = checkLocationStatus(lat, lng);
+            
+            // Find or create location status element
+            let statusElement = document.getElementById('location-status');
+            if (!statusElement) {
+                statusElement = document.createElement('div');
+                statusElement.id = 'location-status';
+                
+                // Insert before the map
+                const mapContainer = document.getElementById('map');
+                mapContainer.parentNode.insertBefore(statusElement, mapContainer);
+            }
+            
+            // Update status display
+            statusElement.className = 'location-status';
+            
+            if (isInside === true) {
+                statusElement.classList.add('inside');
+                statusElement.innerHTML = '<i class="ph-check-circle me-2"></i>Device is inside land territory';
+            } else if (isInside === false) {
+                statusElement.classList.add('outside');
+                statusElement.innerHTML = '<i class="ph-warning-circle me-2"></i>Warning: Device is outside land territory!';
+            } else {
+                statusElement.classList.add('unknown');
+                statusElement.innerHTML = '<i class="ph-question me-2"></i>Location status unknown';
             }
         }
 
