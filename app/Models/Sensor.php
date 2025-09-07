@@ -30,7 +30,7 @@ class Sensor extends Model
 
     protected $casts = [
         'thresholds' => 'array',
-        'value' => 'float',
+        'value' => 'json',
         'reading_timestamp' => 'datetime',
         'enabled' => 'boolean',
         'alert_enabled' => 'boolean',
@@ -128,8 +128,14 @@ class Sensor extends Model
             return false;
         }
 
-        $belowMin = $this->alert_threshold_min !== null && $this->value < $this->alert_threshold_min;
-        $aboveMax = $this->alert_threshold_max !== null && $this->value > $this->alert_threshold_max;
+        // Only check thresholds for numeric values
+        if (!is_numeric($this->value)) {
+            return false;
+        }
+
+        $numericValue = (float) $this->value;
+        $belowMin = $this->alert_threshold_min !== null && $numericValue < $this->alert_threshold_min;
+        $aboveMax = $this->alert_threshold_max !== null && $numericValue > $this->alert_threshold_max;
 
         return $belowMin || $aboveMax;
     }
@@ -137,7 +143,7 @@ class Sensor extends Model
     /**
      * Update the sensor reading.
      */
-    public function updateReading(float $value, ?string $timestamp = null): void
+    public function updateReading($value, ?string $timestamp = null): void
     {
         $this->update([
             'value' => $value,
@@ -154,8 +160,20 @@ class Sensor extends Model
             return 'No reading';
         }
 
+        // Handle JSON/array values
+        if (is_array($this->value) || is_object($this->value)) {
+            return json_encode($this->value);
+        }
+
+        // Handle numeric values
+        if (is_numeric($this->value)) {
+            $unit = $this->unit ? " {$this->unit}" : '';
+            return number_format((float) $this->value, 2) . $unit;
+        }
+
+        // Handle string values
         $unit = $this->unit ? " {$this->unit}" : '';
-        return number_format($this->value, 2) . $unit;
+        return $this->value . $unit;
     }
 
     /**
@@ -191,11 +209,18 @@ class Sensor extends Model
             return 'normal';
         }
 
-        if ($this->alert_threshold_min !== null && $this->value < $this->alert_threshold_min) {
+        // Only check thresholds for numeric values
+        if (!is_numeric($this->value)) {
+            return 'normal';
+        }
+
+        $numericValue = (float) $this->value;
+
+        if ($this->alert_threshold_min !== null && $numericValue < $this->alert_threshold_min) {
             return 'low';
         }
 
-        if ($this->alert_threshold_max !== null && $this->value > $this->alert_threshold_max) {
+        if ($this->alert_threshold_max !== null && $numericValue > $this->alert_threshold_max) {
             return 'high';
         }
 

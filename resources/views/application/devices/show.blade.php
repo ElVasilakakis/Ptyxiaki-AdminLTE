@@ -359,11 +359,11 @@
                 storeSensorData({
                     device_id: device.id,
                     sensor_type: 'location',
-                    value: JSON.stringify({
+                    value: {
                         latitude,
                         longitude,
                         status
-                    }),
+                    },
                     unit: null
                 });
 
