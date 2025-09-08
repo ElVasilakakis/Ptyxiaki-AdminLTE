@@ -56,6 +56,11 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
         Route::patch('/{device}/toggle-status', [DevicesController::class, 'toggleStatus'])->name('app.devices.toggle-status');
         Route::patch('/{device}/update-status', [DevicesController::class, 'updateStatus'])->name('app.devices.update-status');
         Route::delete('/{device}', [DevicesController::class, 'destroy'])->name('app.devices.destroy');
+        
+        // MQTT Sensor Data Routes
+        Route::post('/{device}/store-sensors', [DevicesController::class, 'storeSensors'])->name('app.devices.store-sensors');
+        Route::get('/{device}/alerts', [DevicesController::class, 'getAlerts'])->name('app.devices.alerts');
+        Route::get('/{device}/sensor-data', [DevicesController::class, 'getSensorData'])->name('app.devices.sensor-data');
     });
 
     Route::group(['prefix' => 'sensors'], function () {

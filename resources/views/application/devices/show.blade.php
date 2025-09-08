@@ -11,7 +11,6 @@
             width: 100%;
             border-radius: 0.375rem;
             z-index: 1;
-            /* Fix map layering issues */
         }
 
         .leaflet-container {
@@ -19,7 +18,6 @@
             width: 100% !important;
         }
 
-        /* Your existing styles */
         .mqtt-status {
             padding: 0.5rem 1rem;
             border-radius: 0.375rem;
@@ -48,6 +46,7 @@
             padding: 1rem;
             margin-bottom: 1rem;
             background: #f9fafb;
+            transition: all 0.3s ease;
         }
 
         .sensor-value {
@@ -68,7 +67,6 @@
             color: #9ca3af;
         }
 
-        /* Location status styles */
         .location-status {
             padding: 0.5rem 1rem;
             border-radius: 0.375rem;
@@ -95,7 +93,6 @@
             border: 1px solid #d1d5db;
         }
 
-        /* Sensor alert styles */
         .sensor-alert {
             padding: 0.5rem 1rem;
             border-radius: 0.375rem;
@@ -127,9 +124,17 @@
             border-color: #d97706;
             background: #fffbeb;
         }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
     </style>
 @endsection
-
 
 @section('scripts')
     <!-- Leaflet JS -->
@@ -169,12 +174,10 @@
                     return;
                 }
 
-                // Default center (Greece)
                 let defaultLat = 39.0742;
                 let defaultLng = 21.8243;
                 let defaultZoom = 6;
 
-                // Check if device has current location from previous data
                 if (device.current_location && device.current_location.coordinates) {
                     defaultLat = device.current_location.coordinates[1];
                     defaultLng = device.current_location.coordinates[0];
@@ -187,7 +190,6 @@
                     console.log('📍 Using device location:', defaultLat, defaultLng);
                 }
 
-                // Initialize map with proper options
                 map = L.map('map', {
                     center: [defaultLat, defaultLng],
                     zoom: defaultZoom,
@@ -196,13 +198,11 @@
                     attributionControl: true
                 });
 
-                // Add tile layer
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     maxZoom: 19,
                     attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 }).addTo(map);
 
-                // Add land GeoJSON polygon if available
                 if (landData && landData.geojson) {
                     try {
                         const landGeoJSON = typeof landData.geojson === 'string' ? JSON.parse(landData.geojson) : landData.geojson;
@@ -221,7 +221,6 @@
                     }
                 }
 
-                // Add device marker if location exists
                 if (device.current_location && device.current_location.coordinates) {
                     const lat = device.current_location.coordinates[1];
                     const lng = device.current_location.coordinates[0];
@@ -234,7 +233,6 @@
                     updateLocationStatus(lat, lng);
                 }
 
-                // Force map resize after initialization
                 setTimeout(function() {
                     map.invalidateSize();
                 }, 100);
@@ -243,7 +241,7 @@
             }, 100);
         }
 
-        // Update MQTT status with debugging
+        // Update MQTT status
         function updateMqttStatus(status, message = '') {
             const statusElement = document.getElementById('mqtt-status');
             const connectBtn = document.getElementById('connect-btn');
@@ -301,8 +299,10 @@
             updateMqttStatus('connected');
         }
 
-        // Enhanced MQTT connection with debugging
+        // Enhanced MQTT connection with extensive debugging
         function connectMqtt() {
+            console.log('🚀 Connect button clicked, isConnected:', isConnected);
+            
             if (isConnected) {
                 console.log('🔌 Disconnecting MQTT...');
                 if (mqttClient) {
@@ -324,7 +324,6 @@
 
             // Build MQTT broker URL using device protocol
             const protocol = device.protocol || 'ws';
-            
             console.log('🔧 Device protocol:', protocol);
             console.log('🔧 MQTT Broker data:', mqttBroker);
             
@@ -343,26 +342,16 @@
                     brokerUrl = `wss://${mqttBroker.host}:${port}${wssPath}`;
                     break;
                 case 'mqtt':
-                    const mqttPort = device.mqtt_port || 1883;
                     const wsPort = device.ws_port || 8083;
                     const mqttPath = mqttBroker.path || '/mqtt';
-                    const intendedUrl = `mqtt://${mqttBroker.host}:${mqttPort}${mqttPath}`;
                     brokerUrl = `ws://${mqttBroker.host}:${wsPort}${mqttPath}`;
-                    console.warn('⚠️ IMPORTANT: Web browsers cannot use native MQTT protocol due to security restrictions.');
-                    console.log(`📋 Your selected protocol: mqtt://${mqttBroker.host}:${mqttPort}${mqttPath}`);
-                    console.log(`🔧 Browser-compatible URL: ${brokerUrl} (using WebSocket port ${wsPort})`);
-                    console.log('💡 For native MQTT connections, use a desktop application or server-side code.');
+                    console.warn('⚠️ MQTT protocol converted to WebSocket for browser compatibility');
                     break;
                 case 'mqtts':
-                    const mqttsPort = device.mqtts_port || 8883;
                     const wssPort = device.wss_port || 8084;
                     const mqttsPath = mqttBroker.path || '/mqtt';
-                    const intendedSecureUrl = `mqtts://${mqttBroker.host}:${mqttsPort}${mqttsPath}`;
                     brokerUrl = `wss://${mqttBroker.host}:${wssPort}${mqttsPath}`;
-                    console.warn('⚠️ IMPORTANT: Web browsers cannot use native MQTTS protocol due to security restrictions.');
-                    console.log(`📋 Your selected protocol: mqtts://${mqttBroker.host}:${mqttsPort}${mqttsPath}`);
-                    console.log(`🔧 Browser-compatible URL: ${brokerUrl} (using secure WebSocket port ${wssPort})`);
-                    console.log('💡 For native MQTTS connections, use a desktop application or server-side code.');
+                    console.warn('⚠️ MQTTS protocol converted to WSS for browser compatibility');
                     break;
                 default:
                     port = device.ws_port || 8083;
@@ -390,14 +379,16 @@
                 options.password = mqttBroker.password || '';
                 console.log('🔐 MQTT Authentication:', {
                     username: options.username,
-                    passwordLength: options.password.length,
-                    passwordPreview: options.password.substring(0, 10) + '...'
+                    passwordLength: options.password.length
                 });
+            } else {
+                console.log('🔐 No MQTT authentication configured');
             }
 
             try {
                 console.log('🔌 Creating MQTT client...');
                 mqttClient = mqtt.connect(brokerUrl, options);
+                console.log('✅ MQTT client created, waiting for events...');
 
                 // Connection timeout handler
                 connectionTimeout = setTimeout(() => {
@@ -410,9 +401,9 @@
                     }
                 }, 30000);
 
-                mqttClient.on('connect', function() {
+                mqttClient.on('connect', function(connack) {
                     clearTimeout(connectionTimeout);
-                    console.log('✅ Connected to MQTT broker successfully');
+                    console.log('✅ Connected to MQTT broker successfully!', connack);
                     isConnected = true;
                     updateMqttStatus('connected');
 
@@ -420,11 +411,11 @@
                     if (device.topics && device.topics.length > 0) {
                         console.log('📨 Subscribing to topics:', device.topics);
                         device.topics.forEach(topic => {
-                            mqttClient.subscribe(topic, function(err) {
+                            mqttClient.subscribe(topic, { qos: 0 }, function(err) {
                                 if (err) {
                                     console.error(`❌ Failed to subscribe to topic: ${topic}`, err);
                                 } else {
-                                    console.log(`✅ Subscribed to topic: ${topic}`);
+                                    console.log(`✅ Successfully subscribed to topic: ${topic}`);
                                 }
                             });
                         });
@@ -434,16 +425,18 @@
 
                     // Start scanning every 10 seconds
                     scanInterval = setInterval(function() {
-                        console.log('🔍 Scanning for messages...');
+                        console.log('🔍 Scanning for messages... (client connected:', mqttClient.connected, ')');
                     }, 10000);
                 });
 
-                mqttClient.on('message', function(topic, message) {
+                mqttClient.on('message', function(topic, message, packet) {
                     const messageStr = message.toString();
-                    console.log('📩 Received message:', {
+                    console.log('📩 Received MQTT message:', {
                         topic: topic,
-                        message: messageStr,
-                        length: messageStr.length,
+                        messageLength: messageStr.length,
+                        qos: packet.qos,
+                        retain: packet.retain,
+                        messagePreview: messageStr.substring(0, 200) + (messageStr.length > 200 ? '...' : ''),
                         timestamp: new Date().toISOString()
                     });
                     
@@ -460,14 +453,8 @@
                     console.error('🔍 Error details:', {
                         name: error.name,
                         message: error.message,
-                        code: error.code,
-                        stack: error.stack
+                        code: error.code
                     });
-                    
-                    // Specific error handling
-                    if (error.message && error.message.includes('Connection refused')) {
-                        console.error('🚫 Connection refused - check credentials and permissions');
-                    }
                     
                     updateMqttStatus('disconnected', error.message);
                     isConnected = false;
@@ -485,47 +472,47 @@
 
                 mqttClient.on('offline', function() {
                     console.log('📴 MQTT client offline');
+                    updateMqttStatus('disconnected', 'Client offline');
                 });
 
                 mqttClient.on('reconnect', function() {
                     console.log('🔄 MQTT attempting to reconnect...');
+                    updateMqttStatus('connecting', 'Reconnecting...');
                 });
 
-                mqttClient.on('disconnect', function() {
-                    console.log('↔️ MQTT client disconnected');
+                mqttClient.on('disconnect', function(packet) {
+                    console.log('↔️ MQTT client disconnected', packet);
+                    updateMqttStatus('disconnected', 'Disconnected');
                 });
 
             } catch (error) {
-                console.error('💥 Failed to connect to MQTT broker:', error);
+                console.error('💥 Failed to create MQTT client:', error);
                 updateMqttStatus('disconnected', error.message);
             }
         }
 
         // Handle incoming MQTT messages with debugging
         function handleMqttMessage(topic, messageStr) {
-            console.log('🔄 Processing MQTT message:', {
-                topic: topic,
-                messagePreview: messageStr.substring(0, 100) + (messageStr.length > 100 ? '...' : ''),
-                fullLength: messageStr.length
-            });
+            console.log('🔄 Processing MQTT message from topic:', topic);
+            console.log('📝 Message content:', messageStr);
 
             try {
                 const message = JSON.parse(messageStr);
-                console.log('✅ Parsed message:', message);
+                console.log('✅ Successfully parsed JSON message:', message);
 
                 if (message.type === 'location') {
                     console.log('📍 Handling location message');
                     handleLocationMessage(message);
                 } else if (message.sensors) {
-                    console.log('📊 Handling sensors message');
+                    console.log('📊 Handling sensors message with', message.sensors.length, 'sensors');
                     handleSensorsMessage(message);
                 } else {
-                    console.log('❓ Unknown message type:', message);
+                    console.log('❓ Unknown message type or structure:', message);
                 }
 
             } catch (error) {
-                console.error('❌ Failed to parse MQTT message:', error);
-                console.error('🔍 Raw message:', messageStr);
+                console.error('❌ Failed to parse MQTT message as JSON:', error);
+                console.error('🔍 Raw message content:', messageStr);
             }
         }
 
@@ -551,6 +538,7 @@
                 }
 
                 // Store sensor data
+                console.log('💾 Storing location data in backend...');
                 storeSensorData({
                     device_id: device.id,
                     sensor_type: 'location',
@@ -558,13 +546,209 @@
                     unit: null
                 });
 
-                console.log('✅ Location updated successfully');
             } else {
-                console.warn('⚠️ Invalid location data received:', locationData);
+                console.warn('⚠️ Invalid location data received - missing coordinates:', locationData);
             }
         }
 
-        // Additional helper functions...
+        // Handle sensors messages with debugging
+        function handleSensorsMessage(sensorsData) {
+            console.log('📊 Processing sensors data:', sensorsData);
+            
+            if (sensorsData.sensors && Array.isArray(sensorsData.sensors)) {
+                console.log('📊 Found', sensorsData.sensors.length, 'sensors to process');
+                
+                sensorsData.sensors.forEach((sensor, index) => {
+                    const { type, value } = sensor;
+                    console.log(`📊 Processing sensor ${index + 1}:`, { type, value });
+                    
+                    // Parse value to separate numeric value and unit
+                    const parsedValue = parseValueAndUnit(value);
+                    console.log(`📊 Parsed value for ${type}:`, parsedValue);
+                    
+                    storeSensorData({
+                        device_id: device.id,
+                        sensor_type: type,
+                        value: parsedValue.value,
+                        unit: parsedValue.unit
+                    });
+                });
+            } else {
+                console.warn('⚠️ Invalid sensors data - missing sensors array:', sensorsData);
+            }
+        }
+
+        // Parse value and unit from string like "54.0 celsius"
+        function parseValueAndUnit(valueString) {
+            if (typeof valueString !== 'string') {
+                return { value: valueString, unit: null };
+            }
+
+            const parts = valueString.trim().split(' ');
+            if (parts.length >= 2) {
+                const numericPart = parts[0];
+                const unitPart = parts.slice(1).join(' ');
+                
+                if (!isNaN(numericPart)) {
+                    return { 
+                        value: parseFloat(numericPart), 
+                        unit: unitPart 
+                    };
+                }
+            }
+            
+            return { value: valueString, unit: null };
+        }
+
+        // Store sensor data via AJAX with debugging
+        function storeSensorData(sensorData) {
+            console.log('💾 Attempting to store sensor data:', sensorData);
+            
+            fetch(`{{ route('app.devices.store-sensors', $device) }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify(sensorData)
+            })
+            .then(response => {
+                console.log('📡 Backend response received:', response.status, response.statusText);
+                return response.json();
+            })
+            .then(data => {
+                console.log('✅ Backend response data:', data);
+                if (data.success) {
+                    console.log('✅ Sensor data stored successfully, updating UI...');
+                    updateSensorCard(data.sensor);
+                    updateAlerts();
+                } else {
+                    console.error('❌ Backend reported failure:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('❌ Error storing sensor data:', error);
+            });
+        }
+
+        // Update sensor card in the UI
+        function updateSensorCard(sensor) {
+            console.log('🎨 Updating sensor card for:', sensor.sensor_type, sensor);
+            
+            const container = document.getElementById('sensors-container');
+            
+            if (container.querySelector('.text-muted')) {
+                container.innerHTML = '';
+                console.log('🧹 Cleared placeholder text');
+            }
+
+            let card = document.getElementById(`sensor-${sensor.id}`);
+            
+            if (!card) {
+                console.log('➕ Creating new sensor card for:', sensor.sensor_type);
+                card = createSensorCard(sensor);
+                container.appendChild(card);
+            } else {
+                console.log('🔄 Updating existing sensor card for:', sensor.sensor_type);
+                updateExistingSensorCard(card, sensor);
+            }
+        }
+
+        // Create new sensor card
+        function createSensorCard(sensor) {
+            const col = document.createElement('div');
+            col.className = 'col-md-6 col-lg-4 mb-3';
+            
+            const alertClass = getAlertClass(sensor.alert_status);
+            
+            col.innerHTML = `
+                <div id="sensor-${sensor.id}" class="sensor-card ${alertClass}">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div class="sensor-type">${sensor.sensor_type}</div>
+                        <div class="pulse" style="width: 8px; height: 8px; background: #16a34a; border-radius: 50%;"></div>
+                    </div>
+                    <div class="sensor-value">${sensor.formatted_value}</div>
+                    <div class="last-update">Just now</div>
+                    ${sensor.alert_status !== 'normal' ? `
+                        <div class="sensor-alert ${sensor.alert_status} mt-2">
+                            <i class="${sensor.alert_status === 'high' ? 'ph-arrow-up' : 'ph-arrow-down'}"></i>
+                            ${sensor.alert_status === 'high' ? 'High Alert' : 'Low Alert'}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            return col;
+        }
+
+        // Update existing sensor card with null checks
+        function updateExistingSensorCard(card, sensor) {
+            const alertClass = getAlertClass(sensor.alert_status);
+            const sensorCard = card.querySelector('.sensor-card');
+            
+            // Add null check
+            if (!sensorCard) {
+                console.warn('⚠️ Sensor card element not found, recreating...');
+                // Remove the old card and create a new one
+                card.remove();
+                const container = document.getElementById('sensors-container');
+                const newCard = createSensorCard(sensor);
+                container.appendChild(newCard);
+                return;
+            }
+            
+            sensorCard.className = `sensor-card ${alertClass}`;
+            
+            const valueElement = sensorCard.querySelector('.sensor-value');
+            const updateElement = sensorCard.querySelector('.last-update');
+            
+            if (valueElement) valueElement.textContent = sensor.formatted_value;
+            if (updateElement) updateElement.textContent = 'Just now';
+            
+            // Update alert
+            let alertDiv = sensorCard.querySelector('.sensor-alert');
+            if (sensor.alert_status !== 'normal') {
+                if (!alertDiv) {
+                    alertDiv = document.createElement('div');
+                    alertDiv.className = `sensor-alert ${sensor.alert_status} mt-2`;
+                    sensorCard.appendChild(alertDiv);
+                }
+                alertDiv.innerHTML = `
+                    <i class="${sensor.alert_status === 'high' ? 'ph-arrow-up' : 'ph-arrow-down'}"></i>
+                    ${sensor.alert_status === 'high' ? 'High Alert' : 'Low Alert'}
+                `;
+            } else if (alertDiv) {
+                alertDiv.remove();
+            }
+        }
+
+        // Get alert CSS class
+        function getAlertClass(alertStatus) {
+            switch (alertStatus) {
+                case 'high': return 'alert-high';
+                case 'low': return 'alert-low';
+                default: return '';
+            }
+        }
+
+        // Update alerts section
+        function updateAlerts() {
+            console.log('🚨 Updating alerts section...');
+            fetch(`{{ route('app.devices.alerts', $device) }}`)
+                .then(response => response.json())
+                .then(data => {
+                    const alertsContainer = document.getElementById('sensor-alerts-container');
+                    if (alertsContainer && data.alerts) {
+                        alertsContainer.innerHTML = data.alerts;
+                        console.log('✅ Alerts updated, count:', data.alert_count);
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Error updating alerts:', error);
+                });
+        }
+
+        // Helper functions for map and location
         function addDeviceMarker(lat, lng, popupText) {
             console.log('📌 Adding device marker:', { lat, lng, popupText });
             
@@ -575,7 +759,6 @@
             
             if (isInside === true) {
                 iconColor = '#16a34a'; // green for inside
-                iconClass = 'ph-map-pin';
             } else if (isInside === false) {
                 iconColor = '#dc2626'; // red for outside
                 iconClass = 'ph-warning';
@@ -601,48 +784,73 @@
         }
 
         function checkLocationStatus(lat, lng) {
-            // Implementation for checking if location is within boundaries
-            return null; // Placeholder
+            // Check if point is within GeoJSON boundaries
+            if (landGeoJSONLayer) {
+                const point = L.latLng(lat, lng);
+                let isInside = false;
+                
+                landGeoJSONLayer.eachLayer(function(layer) {
+                    if (layer.getBounds && layer.getBounds().contains(point)) {
+                        isInside = true;
+                    }
+                });
+                
+                return isInside;
+            }
+            return null;
         }
 
         function updateLocationStatus(lat, lng) {
-            // Implementation for updating location status display
-            console.log('📍 Updating location status display');
-        }
-
-        function handleSensorsMessage(sensorsData) {
-            console.log('📊 Processing sensors data:', sensorsData);
-            // Implementation for handling sensor data
-        }
-
-        function storeSensorData(sensorData) {
-            console.log('💾 Storing sensor data:', sensorData);
-            // Implementation for storing sensor data via AJAX
+            const statusElement = document.getElementById('location-status');
+            if (!statusElement) return;
+            
+            const isInside = checkLocationStatus(lat, lng);
+            
+            if (isInside === true) {
+                statusElement.className = 'location-status inside';
+                statusElement.textContent = 'Inside Geofence';
+            } else if (isInside === false) {
+                statusElement.className = 'location-status outside';
+                statusElement.textContent = 'Outside Geofence';
+            } else {
+                statusElement.className = 'location-status unknown';
+                statusElement.textContent = 'Location Status Unknown';
+            }
         }
 
         function loadPreviousSensorData() {
-            console.log('📈 Loading previous sensor data');
-            // Implementation for loading previous sensor data
+            console.log('📈 Loading previous sensor data...');
+            
+            if (previousSensors && previousSensors.length > 0) {
+                console.log('📊 Found', previousSensors.length, 'previous sensors');
+                const container = document.getElementById('sensors-container');
+                container.innerHTML = '';
+                
+                previousSensors.forEach(sensor => {
+                    console.log('📊 Loading sensor:', sensor.sensor_type);
+                    updateSensorCard(sensor);
+                });
+            } else {
+                console.log('📊 No previous sensor data found');
+            }
         }
 
         // Initialize everything when page loads
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Initializing application...');
+            console.log('🚀 Page loaded, initializing application...');
             
             initMap();
             loadPreviousSensorData();
             updateMqttStatus('disconnected');
 
-            // Connect button event
             const connectBtn = document.getElementById('connect-btn');
             if (connectBtn) {
                 connectBtn.addEventListener('click', connectMqtt);
                 console.log('✅ Connect button event listener added');
             } else {
-                console.error('❌ Connect button not found');
+                console.error('❌ Connect button not found!');
             }
             
-            // Pause button event
             const pauseBtn = document.getElementById('pause-btn');
             if (pauseBtn) {
                 pauseBtn.addEventListener('click', togglePause);
@@ -681,7 +889,6 @@
     </script>
 @endsection
 
-
 @section('content')
     <div class="content">
         <div class="row">
@@ -690,6 +897,7 @@
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">Device: {{ $device->name }}</h6>
                         <div class="d-flex align-items-center gap-3">
+                            <div id="location-status" class="location-status unknown">Location Status Unknown</div>
                             <div id="mqtt-status" class="mqtt-status disconnected">Disconnected</div>
                             <button type="button" id="pause-btn" class="btn btn-warning" style="display: none;">
                                 <i class="ph-pause me-2"></i>Pause
@@ -813,9 +1021,30 @@
                             <div class="col-12">
                                 <h6 class="fw-semibold mb-3">Live Sensor Data</h6>
                                 <div id="sensors-container" class="row">
-                                    <div class="col-12">
-                                        <p class="text-muted">Connect to MQTT broker to see live sensor data</p>
-                                    </div>
+                                    @if ($device->sensors->count() > 0)
+                                        @foreach ($device->sensors as $sensor)
+                                            <div class="col-md-6 col-lg-4 mb-3">
+                                                <div id="sensor-{{ $sensor->id }}" class="sensor-card {{ $sensor->getAlertStatus() === 'high' ? 'alert-high' : ($sensor->getAlertStatus() === 'low' ? 'alert-low' : '') }}">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <div class="sensor-type">{{ $sensor->sensor_type }}</div>
+                                                        <div style="width: 8px; height: 8px; background: {{ $sensor->hasRecentReading() ? '#16a34a' : '#6b7280' }}; border-radius: 50%;"></div>
+                                                    </div>
+                                                    <div class="sensor-value">{{ $sensor->getFormattedValue() }}</div>
+                                                    <div class="last-update">{{ $sensor->getTimeSinceLastReading() ?? 'No readings yet' }}</div>
+                                                    @if ($sensor->getAlertStatus() !== 'normal')
+                                                        <div class="sensor-alert {{ $sensor->getAlertStatus() }} mt-2">
+                                                            <i class="{{ $sensor->getAlertStatus() === 'high' ? 'ph-arrow-up' : 'ph-arrow-down' }}"></i>
+                                                            {{ $sensor->getAlertStatus() === 'high' ? 'High Alert' : 'Low Alert' }}
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    @else
+                                        <div class="col-12">
+                                            <p class="text-muted">Connect to MQTT broker to see live sensor data</p>
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         </div>

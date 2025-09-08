@@ -226,4 +226,17 @@ class Sensor extends Model
 
         return 'normal';
     }
+
+    public function getFormattedValueAttribute(): string
+    {
+        return $this->getFormattedValue();
+    }
+
+    /**
+     * Get the alert status attribute
+     */
+    public function getAlertStatusAttribute(): string
+    {
+        return $this->getAlertStatus();
+    }
 }
