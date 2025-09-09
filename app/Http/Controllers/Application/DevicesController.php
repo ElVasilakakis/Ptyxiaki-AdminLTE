@@ -531,4 +531,387 @@ class DevicesController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Poll LoRaWAN data from network server (TTN Compatible)
+     */
+    public function pollLorawanData(Request $request, Device $device): JsonResponse
+    {
+        // Ensure user can only poll data for their own devices
+        if ($device->user_id !== Auth::id()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        // Ensure this is a LoRaWAN device
+        if ($device->mqttBroker->type !== 'lorawan') {
+            return response()->json(['success' => false, 'message' => 'Device is not a LoRaWAN device'], 400);
+        }
+
+        try {
+            \Log::info('Polling LoRaWAN data for device: ' . $device->device_id);
+
+            // Get MQTT broker configuration
+            $mqttBroker = $device->mqttBroker;
+            if (!$mqttBroker) {
+                return response()->json(['success' => false, 'message' => 'No network server configured'], 400);
+            }
+
+            // Detect if this is TTN and set proper configuration
+            $isTTN = str_contains($mqttBroker->host, 'thethings.industries');
+            $port = $isTTN ? 8883 : ($mqttBroker->port ?: 1883); // TTN requires secure port 8883
+            $useTLS = $isTTN; // TTN requires TLS
+
+            // For LoRaWAN connections, extract hostname without protocol prefix
+            $connectionHost = $mqttBroker->host;
+            // Remove protocol prefixes if present
+            $connectionHost = preg_replace('/^(mqtts?:\/\/)/', '', $connectionHost);
+
+            // Generate client ID
+            $clientId = 'laravel_lorawan_' . uniqid();
+
+            \Log::info('LoRaWAN connection settings', [
+                'original_host' => $mqttBroker->host,
+                'connection_host' => $connectionHost,
+                'port' => $port,
+                'is_ttn' => $isTTN,
+                'use_tls' => $useTLS,
+                'mqtt_protocol' => 'v3.1.1'
+            ]);
+
+            \Log::info('Complete MQTT Connection Parameters', [
+                'host' => $connectionHost,
+                'port' => $port,
+                'mqtt_version' => 'v3.1.1',
+                'username' => $mqttBroker->username,
+                'password' => $mqttBroker->password ? '[REDACTED - ' . strlen($mqttBroker->password) . ' chars]' : null,
+                'client_id' => $clientId,
+                'topics' => $device->topics,
+                'keepalive' => $mqttBroker->keepalive ?: 60,
+                'use_tls' => $useTLS,
+                'connect_timeout' => 30,
+                'socket_timeout' => 30
+            ]);
+
+            // Check if PHP MQTT client is available
+            if (!class_exists('\PhpMqtt\Client\MqttClient')) {
+                \Log::error('PHP MQTT Client library not found');
+                return response()->json([
+                    'success' => false, 
+                    'message' => 'MQTT client library not installed'
+                ], 500);
+            }
+
+            // Create MQTT client using the same approach as working LoRaWANController
+            // Don't specify MQTT version - let it use default
+            $mqttClient = new \PhpMqtt\Client\MqttClient(
+                $connectionHost,
+                $port,
+                $clientId
+            );
+
+            // Configure connection settings exactly like working LoRaWANController
+            $connectionSettings = (new \PhpMqtt\Client\ConnectionSettings())
+                ->setUseTls($useTLS)
+                ->setTlsVerifyPeer(true)
+                ->setTlsSelfSignedAllowed(false)
+                ->setUsername($mqttBroker->username)
+                ->setPassword($mqttBroker->password)
+                ->setKeepAliveInterval($mqttBroker->keepalive ?: 60)
+                ->setConnectTimeout(30)
+                ->setSocketTimeout(30);
+
+            // TTN requires username and API key authentication
+            if ($mqttBroker->username && $mqttBroker->password) {
+                $connectionSettings->setUsername($mqttBroker->username);
+                $connectionSettings->setPassword($mqttBroker->password);
+                \Log::info('Using authentication', [
+                    'username' => $mqttBroker->username,
+                    'has_password' => !empty($mqttBroker->password)
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false, 
+                    'message' => 'Username and password/API key required for LoRaWAN connection'
+                ], 400);
+            }
+
+            $receivedMessages = [];
+            $sensors = [];
+            $locationData = null;
+
+            try {
+                // Connect to MQTT broker with clean session (same as working LoRaWANController)
+                $cleanSession = true;
+                $mqttClient->connect($connectionSettings, $cleanSession);
+                \Log::info('Connected to LoRaWAN network server: ' . $mqttBroker->host);
+
+                // Subscribe to device topics if configured
+                if ($device->topics && is_array($device->topics)) {
+                    foreach ($device->topics as $topic) {
+                        \Log::info('Subscribing to LoRaWAN topic: ' . $topic);
+                        $mqttClient->subscribe($topic, function ($topic, $message) use (&$receivedMessages, &$sensors, &$locationData, $device) {
+                            \Log::info('Received LoRaWAN message from topic: ' . $topic, [
+                                'message_length' => strlen($message),
+                                'message_preview' => substr($message, 0, 200)
+                            ]);
+                            
+                            try {
+                                $data = json_decode($message, true);
+                                if ($data) {
+                                    $receivedMessages[] = ['topic' => $topic, 'data' => $data];
+                                    
+                                    // Handle TTN message format
+                                    if (isset($data['uplink_message'])) {
+                                        $this->processTTNUplinkMessage($data['uplink_message'], $device, $sensors, $locationData);
+                                    }
+                                    // Handle generic sensor data format
+                                    elseif (isset($data['sensors']) && is_array($data['sensors'])) {
+                                        foreach ($data['sensors'] as $sensorData) {
+                                            if (isset($sensorData['type']) && isset($sensorData['value'])) {
+                                                $processedSensor = $this->processLorawanSensorData($device, $sensorData);
+                                                if (!empty($processedSensor)) {
+                                                    $sensors[] = $processedSensor;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Handle location data
+                                    elseif (isset($data['latitude']) && isset($data['longitude'])) {
+                                        $locationData = [
+                                            'latitude' => $data['latitude'],
+                                            'longitude' => $data['longitude'],
+                                            'status' => $data['status'] ?? 'unknown'
+                                        ];
+                                        
+                                        $processedLocation = $this->processLorawanSensorData($device, [
+                                            'type' => 'location',
+                                            'value' => $locationData
+                                        ]);
+                                        
+                                        if (!empty($processedLocation)) {
+                                            $sensors[] = $processedLocation;
+                                        }
+                                    }
+                                }
+                            } catch (\Exception $e) {
+                                \Log::error('Error processing LoRaWAN message: ' . $e->getMessage());
+                            }
+                        }, 0);
+                    }
+                    
+                    // Wait for messages - TTN might need more time
+                    $mqttClient->loop(true, true, 10);
+                } else {
+                    \Log::warning('No topics configured for LoRaWAN device: ' . $device->device_id);
+                }
+
+                // Disconnect from MQTT broker
+                $mqttClient->disconnect();
+                \Log::info('Disconnected from LoRaWAN network server');
+
+            } catch (\PhpMqtt\Client\Exceptions\ConnectingToBrokerFailedException $e) {
+                \Log::error('Failed to connect to LoRaWAN broker: ' . $e->getMessage(), [
+                    'host' => $mqttBroker->host,
+                    'port' => $port,
+                    'error_code' => $e->getCode()
+                ]);
+                
+                if (str_contains($e->getMessage(), 'unauthorized')) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Authentication failed - verify your TTN API key and application ID'
+                    ], 401);
+                }
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to connect to LoRaWAN network server'
+                ], 500);
+            }
+
+            // Update device status and last seen
+            $device->update([
+                'status' => count($sensors) > 0 ? 'online' : 'offline',
+                'last_seen_at' => now()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'LoRaWAN data polled successfully',
+                'sensors' => $sensors,
+                'location' => $locationData,
+                'device_status' => $device->status,
+                'last_seen' => $device->last_seen_at->toISOString(),
+                'messages_received' => count($receivedMessages),
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error polling LoRaWAN data: ' . $e->getMessage(), [
+                'device_id' => $device->id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to poll LoRaWAN data',
+                'error' => config('app.debug') ? $e->getMessage() : 'Connection failed'
+            ], 500);
+        }
+    }
+
+
+    /**
+     * Process TTN uplink message format
+     */
+    private function processTTNUplinkMessage($uplinkMessage, $device, &$sensors, &$locationData)
+    {
+        // Process decoded payload
+        if (isset($uplinkMessage['decoded_payload'])) {
+            $payload = $uplinkMessage['decoded_payload'];
+            
+            foreach ($payload as $key => $value) {
+                if (is_numeric($value)) {
+                    $processedSensor = $this->processLorawanSensorData($device, [
+                        'type' => $key,
+                        'value' => $value
+                    ]);
+                    if (!empty($processedSensor)) {
+                        $sensors[] = $processedSensor;
+                    }
+                }
+            }
+        }
+        
+        // Process location data
+        if (isset($uplinkMessage['locations']['user'])) {
+            $userLocation = $uplinkMessage['locations']['user'];
+            $locationData = [
+                'latitude' => $userLocation['latitude'],
+                'longitude' => $userLocation['longitude'],
+                'status' => 'inside_geofence'
+            ];
+            
+            $processedLocation = $this->processLorawanSensorData($device, [
+                'type' => 'location',
+                'value' => $locationData
+            ]);
+            
+            if (!empty($processedLocation)) {
+                $sensors[] = $processedLocation;
+            }
+        }
+        
+        // Process radio metadata (RSSI, SNR)
+        if (isset($uplinkMessage['rx_metadata']) && !empty($uplinkMessage['rx_metadata'])) {
+            $rxMetadata = $uplinkMessage['rx_metadata'][0];
+            
+            if (isset($rxMetadata['rssi'])) {
+                $processedRssi = $this->processLorawanSensorData($device, [
+                    'type' => 'rssi',
+                    'value' => $rxMetadata['rssi'],
+                    'unit' => 'dBm'
+                ]);
+                if (!empty($processedRssi)) {
+                    $sensors[] = $processedRssi;
+                }
+            }
+            
+            if (isset($rxMetadata['snr'])) {
+                $processedSnr = $this->processLorawanSensorData($device, [
+                    'type' => 'snr',
+                    'value' => $rxMetadata['snr'],
+                    'unit' => 'dB'
+                ]);
+                if (!empty($processedSnr)) {
+                    $sensors[] = $processedSnr;
+                }
+            }
+        }
+    }
+
+    /**
+     * Process LoRaWAN sensor data and store in database
+     */
+    private function processLorawanSensorData(Device $device, array $sensorData): array
+    {
+        try {
+            $sensorType = $sensorData['type'];
+            $value = $sensorData['value'];
+            $unit = $sensorData['unit'] ?? null;
+
+            // Parse value if it's a string with unit
+            if (is_string($value) && !is_numeric($value)) {
+                $parsedValue = $this->parseValueAndUnit($value);
+                $value = $parsedValue['value'];
+                $unit = $unit ?: $parsedValue['unit'];
+            }
+
+            // Find or create sensor
+            $sensor = Sensor::firstOrCreate(
+                [
+                    'device_id' => $device->id,
+                    'sensor_type' => $sensorType,
+                    'user_id' => Auth::id(),
+                ],
+                [
+                    'sensor_name' => ucfirst($sensorType) . ' Sensor',
+                    'description' => 'Auto-created LoRaWAN sensor',
+                    'unit' => $unit,
+                    'enabled' => true,
+                    'alert_enabled' => false,
+                ]
+            );
+
+            // Update sensor reading
+            $sensor->updateReading($value, now());
+            
+            // Update unit if provided and different
+            if ($unit && $sensor->unit !== $unit) {
+                $sensor->update(['unit' => $unit]);
+            }
+
+            // Refresh sensor to get updated data
+            $sensor->refresh();
+
+            return [
+                'id' => $sensor->id,
+                'sensor_type' => $sensor->sensor_type,
+                'sensor_name' => $sensor->sensor_name,
+                'value' => $sensor->value,
+                'unit' => $sensor->unit,
+                'formatted_value' => $sensor->getFormattedValue(),
+                'alert_status' => $sensor->getAlertStatus(),
+                'reading_timestamp' => $sensor->reading_timestamp?->toISOString(),
+                'time_since_reading' => $sensor->getTimeSinceLastReading(),
+            ];
+
+        } catch (\Exception $e) {
+            \Log::error('Error processing LoRaWAN sensor data: ' . $e->getMessage(), [
+                'sensor_data' => $sensorData,
+                'device_id' => $device->id
+            ]);
+            
+            return [];
+        }
+    }
+
+    /**
+     * Parse value and unit from string like "54.0 celsius"
+     */
+    private function parseValueAndUnit(string $valueString): array
+    {
+        $parts = explode(' ', trim($valueString));
+        if (count($parts) >= 2) {
+            $numericPart = $parts[0];
+            $unitPart = implode(' ', array_slice($parts, 1));
+            
+            if (is_numeric($numericPart)) {
+                return [
+                    'value' => (float) $numericPart,
+                    'unit' => $unitPart
+                ];
+            }
+        }
+        
+        return ['value' => $valueString, 'unit' => null];
+    }
 }

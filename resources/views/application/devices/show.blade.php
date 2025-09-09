@@ -141,8 +141,8 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     @if($device->mqttBroker->type === 'lorawan')
-        <!-- LoRaWAN Device Scripts will be added later -->
-        {{-- Future LoRaWAN implementation --}}
+        <!-- LoRaWAN Device Script -->
+        @include('application.devices.partials.lorawan-device-script')
     @else
         <!-- MQTT.js -->
         <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>

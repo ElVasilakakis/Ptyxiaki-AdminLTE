@@ -7,6 +7,11 @@ use App\Http\Controllers\Application\LandsController;
 use App\Http\Controllers\Application\DevicesController;
 use App\Http\Controllers\Application\SensorsController;
 use App\Http\Controllers\Application\MQTTBrokersController;
+use App\Http\Controllers\LoRaWANController;
+
+Route::get('/debug/lorawan-check', [LoRaWANController::class, 'debugConnection']);
+Route::get('/debug/lorawan-simple', [LoRaWANController::class, 'simpleTest']);
+
 
 // Authentication Routes (Guest only)
 Route::middleware('guest')->group(function () {
@@ -61,6 +66,9 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
         Route::post('/{device}/store-sensors', [DevicesController::class, 'storeSensors'])->name('app.devices.store-sensors');
         Route::get('/{device}/alerts', [DevicesController::class, 'getAlerts'])->name('app.devices.alerts');
         Route::get('/{device}/sensor-data', [DevicesController::class, 'getSensorData'])->name('app.devices.sensor-data');
+        
+        // LoRaWAN Data Polling Route
+        Route::post('/{device}/poll-lorawan', [DevicesController::class, 'pollLorawanData'])->name('app.devices.poll-lorawan');
     });
 
     Route::group(['prefix' => 'sensors'], function () {
