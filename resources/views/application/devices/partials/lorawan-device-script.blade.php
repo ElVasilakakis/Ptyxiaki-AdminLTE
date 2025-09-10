@@ -97,25 +97,25 @@
         }, 100);
     }
 
-    // Start LoRaWAN data polling - UPDATED to 10 seconds
+    // Start LoRaWAN data polling - SIMPLIFIED to use existing sensor data API
     function startLorawanPolling() {
         if (isPolling) {
             console.log('⚠️ LoRaWAN polling already active');
             return;
         }
 
-        console.log('🚀 Starting LoRaWAN data polling...');
+        console.log('🚀 Starting LoRaWAN sensor data polling...');
         isPolling = true;
 
         // Poll data immediately
         pollLorawanData();
 
-        // Set up polling interval (every 10 seconds) - CHANGED FROM 30 to 10
+        // Set up polling interval (every 3 seconds for real-time updates)
         lorawanPollingInterval = setInterval(function() {
             pollLorawanData();
-        }, 10000); // 10 seconds instead of 30
+        }, 3000);
 
-        console.log('✅ LoRaWAN polling started (10 second intervals)');
+        console.log('✅ LoRaWAN polling started (3 second intervals)');
     }
 
     // Stop LoRaWAN data polling
@@ -136,21 +136,18 @@
         console.log('✅ LoRaWAN polling stopped');
     }
 
-    // Poll LoRaWAN data from the network server - SIMPLIFIED FOR FRONTEND-BACKEND FLOW
+    // Poll LoRaWAN sensor data - SIMPLIFIED to use existing getSensorData API
     async function pollLorawanData() {
-        console.log('🔍 Polling LoRaWAN data from network server...');
+        console.log('🔍 Polling LoRaWAN sensor data...');
 
         try {
-            // Make AJAX request to Laravel backend - sends mock data based on your JSON
-            const response = await fetch(`{{ route('app.devices.poll-lorawan', $device) }}`, {
-                method: 'POST',
+            // Use the existing getSensorData API endpoint
+            const response = await fetch(`/api/devices/${device.id}/sensors`, {
+                method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken  // FIXED: Use proper CSRF token
-                },
-                body: JSON.stringify({
-                    device_id: device.id
-                })
+                    'X-CSRF-TOKEN': csrfToken
+                }
             });
 
             if (!response.ok) {
@@ -158,18 +155,17 @@
             }
 
             const data = await response.json();
-            console.log('📡 LoRaWAN polling response received:', response.status, response.statusText);
-            console.log('✅ LoRaWAN polling response data:', data);
+            console.log('📡 LoRaWAN sensor data received:', data);
             
             if (data.success) {
-                console.log('✅ LoRaWAN data polled successfully');
+                console.log('✅ LoRaWAN sensor data updated successfully');
                 
                 // Update device status
                 if (data.device_status) {
                     updateDeviceStatus(data.device_status);
                 }
 
-                // Process sensor data if available - PROCESSES BACKEND DECODED DATA
+                // Process sensor data
                 if (data.sensors && data.sensors.length > 0) {
                     console.log('📊 Processing', data.sensors.length, 'sensor readings');
                     data.sensors.forEach(sensor => {
@@ -178,22 +174,16 @@
                     updateAlerts();
                 }
 
-                // Process location data if available - HANDLES BACKEND LOCATION DATA
-                if (data.location) {
-                    console.log('📍 Processing location data');
-                    handleLocationData(data.location);
-                }
-
                 // Update last seen timestamp
                 if (data.last_seen) {
                     updateLastSeen(data.last_seen);
                 }
             } else {
-                console.warn('⚠️ LoRaWAN polling failed:', data.message);
+                console.warn('⚠️ LoRaWAN sensor data polling failed:', data.message);
             }
 
         } catch (error) {
-            console.error('❌ Error polling LoRaWAN data:', error);
+            console.error('❌ Error polling LoRaWAN sensor data:', error);
         }
     }
 

@@ -144,4 +144,48 @@ class SensorsController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get live sensor data for real-time updates
+     */
+    public function getLiveSensorData(Request $request)
+    {
+        try {
+            $sensors = Sensor::forUser(Auth::id())
+                ->with(['device', 'device.land'])
+                ->latest('reading_timestamp')
+                ->get();
+
+            $sensorData = $sensors->map(function ($sensor) {
+                return [
+                    'id' => $sensor->id,
+                    'sensor_type' => $sensor->sensor_type,
+                    'sensor_name' => $sensor->sensor_name ?: 'Unnamed',
+                    'device_name' => $sensor->device->name,
+                    'land_name' => $sensor->device->land->land_name,
+                    'value' => $sensor->value,
+                    'formatted_value' => $sensor->getFormattedValue(),
+                    'unit' => $sensor->unit ?: '-',
+                    'enabled' => $sensor->enabled,
+                    'alert_enabled' => $sensor->alert_enabled,
+                    'alert_status' => $sensor->getAlertStatus(),
+                    'reading_timestamp' => $sensor->reading_timestamp ? $sensor->reading_timestamp->toISOString() : null,
+                    'reading_human' => $sensor->reading_timestamp ? $sensor->reading_timestamp->diffForHumans() : 'Never',
+                    'reading_formatted' => $sensor->reading_timestamp ? $sensor->reading_timestamp->format('M d, Y H:i:s') : null,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'sensors' => $sensorData,
+                'timestamp' => now()->toISOString()
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch sensor data: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }
