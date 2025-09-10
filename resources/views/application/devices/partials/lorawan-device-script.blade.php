@@ -12,6 +12,9 @@
     const landData = @json($device->land);
     const previousSensors = @json($device->sensors);
 
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
     // DEBUG: Log initial data
     console.log('🔧 LoRaWAN Device Data:', device);
     console.log('🔧 LoRaWAN Network Server Config:', mqttBroker);
@@ -94,7 +97,7 @@
         }, 100);
     }
 
-    // Start LoRaWAN data polling
+    // Start LoRaWAN data polling - UPDATED to 10 seconds
     function startLorawanPolling() {
         if (isPolling) {
             console.log('⚠️ LoRaWAN polling already active');
@@ -107,12 +110,12 @@
         // Poll data immediately
         pollLorawanData();
 
-        // Set up polling interval (every 30 seconds)
+        // Set up polling interval (every 10 seconds) - CHANGED FROM 30 to 10
         lorawanPollingInterval = setInterval(function() {
             pollLorawanData();
-        }, 30000);
+        }, 10000); // 10 seconds instead of 30
 
-        console.log('✅ LoRaWAN polling started (30 second intervals)');
+        console.log('✅ LoRaWAN polling started (10 second intervals)');
     }
 
     // Stop LoRaWAN data polling
@@ -133,26 +136,29 @@
         console.log('✅ LoRaWAN polling stopped');
     }
 
-    // Poll LoRaWAN data from the network server
-    function pollLorawanData() {
+    // Poll LoRaWAN data from the network server - SIMPLIFIED FOR FRONTEND-BACKEND FLOW
+    async function pollLorawanData() {
         console.log('🔍 Polling LoRaWAN data from network server...');
 
-        // Make AJAX request to Laravel backend to poll LoRaWAN data
-        fetch(`{{ route('app.devices.poll-lorawan', $device) }}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            },
-            body: JSON.stringify({
-                device_id: device.id
-            })
-        })
-        .then(response => {
+        try {
+            // Make AJAX request to Laravel backend - sends mock data based on your JSON
+            const response = await fetch(`{{ route('app.devices.poll-lorawan', $device) }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken  // FIXED: Use proper CSRF token
+                },
+                body: JSON.stringify({
+                    device_id: device.id
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
             console.log('📡 LoRaWAN polling response received:', response.status, response.statusText);
-            return response.json();
-        })
-        .then(data => {
             console.log('✅ LoRaWAN polling response data:', data);
             
             if (data.success) {
@@ -163,7 +169,7 @@
                     updateDeviceStatus(data.device_status);
                 }
 
-                // Process sensor data if available
+                // Process sensor data if available - PROCESSES BACKEND DECODED DATA
                 if (data.sensors && data.sensors.length > 0) {
                     console.log('📊 Processing', data.sensors.length, 'sensor readings');
                     data.sensors.forEach(sensor => {
@@ -172,7 +178,7 @@
                     updateAlerts();
                 }
 
-                // Process location data if available
+                // Process location data if available - HANDLES BACKEND LOCATION DATA
                 if (data.location) {
                     console.log('📍 Processing location data');
                     handleLocationData(data.location);
@@ -185,10 +191,10 @@
             } else {
                 console.warn('⚠️ LoRaWAN polling failed:', data.message);
             }
-        })
-        .catch(error => {
+
+        } catch (error) {
             console.error('❌ Error polling LoRaWAN data:', error);
-        });
+        }
     }
 
     // Update device status display
@@ -203,17 +209,17 @@
         });
     }
 
-    // Handle location data from LoRaWAN
+    // Handle location data from LoRaWAN - PROCESSES BACKEND LOCATION RESPONSE
     function handleLocationData(locationData) {
         console.log('📍 Processing LoRaWAN location data:', locationData);
         
-        const { latitude, longitude, status } = locationData;
+        const { latitude, longitude, source } = locationData; // UPDATED TO MATCH BACKEND RESPONSE
 
         if (latitude && longitude) {
-            console.log('✅ Valid coordinates received:', { latitude, longitude, status });
+            console.log('✅ Valid coordinates received:', { latitude, longitude, source });
             
-            // Update device marker with new location and status
-            addDeviceMarker(latitude, longitude, `Status: ${status || 'unknown'}`);
+            // Update device marker with new location and source
+            addDeviceMarker(latitude, longitude, `Source: ${source || 'unknown'}`);
             
             // Update location status display
             updateLocationStatus(latitude, longitude);
@@ -228,7 +234,7 @@
         }
     }
 
-    // Update sensor table row with new data
+    // Update sensor table row with new data - PROCESSES BACKEND SENSOR DATA
     function updateSensorTable(sensor) {
         console.log('📋 Updating sensor table for:', sensor.sensor_type);
         
@@ -243,6 +249,9 @@
 
             if (valueCell) {
                 valueCell.textContent = sensor.formatted_value;
+                // Add visual indication of update
+                valueCell.classList.add('sensor-updated');
+                setTimeout(() => valueCell.classList.remove('sensor-updated'), 2000);
             }
 
             if (statusCell) {
@@ -277,7 +286,7 @@
         }
     }
 
-    // Add new sensor row to table
+    // Add new sensor row to table - CREATES NEW ROWS FOR BACKEND SENSOR DATA
     function addSensorTableRow(sensor) {
         const tableBody = document.getElementById('sensors-table-body');
         if (!tableBody) return;
@@ -285,6 +294,9 @@
         const row = document.createElement('tr');
         row.className = 'sensor-row';
         row.setAttribute('data-sensor-type', sensor.sensor_type);
+        
+        // Get appropriate icon for sensor type
+        const sensorIcon = getSensorIcon(sensor.sensor_type);
         
         const alertBadgeClass = sensor.alert_status === 'normal' ? 'normal' : 
                             sensor.alert_status === 'high' ? 'high' : 'low';
@@ -294,7 +306,7 @@
         row.innerHTML = `
             <td>
                 <div class="d-flex align-items-center">
-                    <i class="ph-thermometer me-2 text-primary"></i>
+                    <i class="${sensorIcon} me-2 text-primary"></i>
                     <div>
                         <div class="fw-medium">${sensor.sensor_type}</div>
                         <small class="text-muted">${sensor.sensor_name || 'Auto-created sensor'}</small>
@@ -319,6 +331,23 @@
         if (noDataRow) {
             noDataRow.style.display = 'none';
         }
+    }
+
+    // Get appropriate icon for sensor type - HELPER FUNCTION
+    function getSensorIcon(sensorType) {
+        const iconMap = {
+            'temperature': 'ph-thermometer',
+            'humidity': 'ph-drop',
+            'battery': 'ph-battery-charging',
+            'rssi': 'ph-wifi-medium',
+            'snr': 'ph-graph',
+            'location': 'ph-map-pin',
+            'altitude': 'ph-mountains',
+            'frequency': 'ph-wave-sine',
+            'spreading_factor': 'ph-broadcast',
+            'bandwidth': 'ph-charts'
+        };
+        return iconMap[sensorType] || 'ph-gauge';
     }
 
     // Update alerts section
@@ -347,7 +376,7 @@
         });
     }
 
-    // Helper functions for map and location
+    // Helper functions for map and location (UNCHANGED)
     function addDeviceMarker(lat, lng, popupText) {
         console.log('📌 Adding device marker:', { lat, lng, popupText });
         
@@ -445,4 +474,16 @@
             error: e.error
         });
     });
+
+    // Export functions for manual control
+    window.startLorawanPolling = startLorawanPolling;
+    window.stopLorawanPolling = stopLorawanPolling;
 </script>
+
+<!-- Add this CSS for visual feedback -->
+<style>
+.sensor-updated {
+    background-color: #e8f5e8 !important;
+    transition: background-color 0.5s ease;
+}
+</style>
