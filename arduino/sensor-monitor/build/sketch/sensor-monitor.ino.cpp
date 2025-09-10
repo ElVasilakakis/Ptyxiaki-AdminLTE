@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#line 1 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki\\ptyxiaki-final\\ptyxiaki-final\\arduino\\sensor-monitor\\sensor-monitor.ino"
+#line 1 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki AdminLTE\\arduino\\sensor-monitor\\sensor-monitor.ino"
 #include <WiFi.h>
 #include <MQTT.h>
 #include <ArduinoJson.h>
@@ -54,23 +54,23 @@ bool gpsValid = false;
 bool generateInsideGeofence = true;
 unsigned long lastGeofenceToggle = 0;
 
-#line 55 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki\\ptyxiaki-final\\ptyxiaki-final\\arduino\\sensor-monitor\\sensor-monitor.ino"
+#line 55 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki AdminLTE\\arduino\\sensor-monitor\\sensor-monitor.ino"
 void setup();
-#line 91 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki\\ptyxiaki-final\\ptyxiaki-final\\arduino\\sensor-monitor\\sensor-monitor.ino"
+#line 91 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki AdminLTE\\arduino\\sensor-monitor\\sensor-monitor.ino"
 void loop();
-#line 126 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki\\ptyxiaki-final\\ptyxiaki-final\\arduino\\sensor-monitor\\sensor-monitor.ino"
+#line 126 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki AdminLTE\\arduino\\sensor-monitor\\sensor-monitor.ino"
 void connect();
-#line 142 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki\\ptyxiaki-final\\ptyxiaki-final\\arduino\\sensor-monitor\\sensor-monitor.ino"
+#line 142 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki AdminLTE\\arduino\\sensor-monitor\\sensor-monitor.ino"
 void readSensors();
-#line 156 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki\\ptyxiaki-final\\ptyxiaki-final\\arduino\\sensor-monitor\\sensor-monitor.ino"
+#line 156 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki AdminLTE\\arduino\\sensor-monitor\\sensor-monitor.ino"
 void generateGPSData();
-#line 172 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki\\ptyxiaki-final\\ptyxiaki-final\\arduino\\sensor-monitor\\sensor-monitor.ino"
+#line 172 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki AdminLTE\\arduino\\sensor-monitor\\sensor-monitor.ino"
 void publishSensorData();
-#line 214 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki\\ptyxiaki-final\\ptyxiaki-final\\arduino\\sensor-monitor\\sensor-monitor.ino"
+#line 235 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki AdminLTE\\arduino\\sensor-monitor\\sensor-monitor.ino"
 void publishGeoData();
-#line 240 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki\\ptyxiaki-final\\ptyxiaki-final\\arduino\\sensor-monitor\\sensor-monitor.ino"
+#line 239 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki AdminLTE\\arduino\\sensor-monitor\\sensor-monitor.ino"
 void updateLCD();
-#line 55 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki\\ptyxiaki-final\\ptyxiaki-final\\arduino\\sensor-monitor\\sensor-monitor.ino"
+#line 55 "C:\\Users\\tsigk\\Desktop\\Ptyxiaki AdminLTE\\arduino\\sensor-monitor\\sensor-monitor.ino"
 void setup() {
     Serial.begin(115200);
     
@@ -135,7 +135,7 @@ void loop() {
         lastMillis = millis();
         readSensors();
         publishSensorData();
-        publishGeoData();
+        // publishGeoData(); // REMOVED - now included in publishSensorData
         updateLCD();
     }
     
@@ -215,45 +215,44 @@ void publishSensorData() {
     potSensor["type"] = "potentiometer";
     potSensor["value"] = String(potValue) + " percent";
     
+    // Add latitude and longitude as geolocation sensors
+    if (gpsValid) {
+        JsonObject latSensor = sensors.createNestedObject();
+        latSensor["type"] = "geolocation";
+        latSensor["subtype"] = "latitude";
+        latSensor["value"] = String(latitude, 6);
+        
+        JsonObject lonSensor = sensors.createNestedObject();
+        lonSensor["type"] = "geolocation";
+        lonSensor["subtype"] = "longitude";
+        lonSensor["value"] = String(longitude, 6);
+    }
+    
+    // Add only timestamp - removed device_id and geofence_status
+    doc["timestamp"] = millis();
+    
     // Serialize and send
     String message;
     serializeJson(doc, message);
     
     if (client.publish(topic, message)) {
-        Serial.println("✓ Sensors data sent to: " + topic);
+        Serial.println("✓ All data sent to: " + topic);
         Serial.println("  Temperature: " + String(temperature, 1) + "°C");
         Serial.println("  Humidity: " + String(humidity, 1) + "%");
         Serial.println("  Light: " + String(lightLevel) + "%");
         Serial.println("  Potentiometer: " + String(potValue) + "%");
+        if (gpsValid) {
+            Serial.println("  Latitude: " + String(latitude, 6) + "°");
+            Serial.println("  Longitude: " + String(longitude, 6) + "°");
+        }
     } else {
-        Serial.println("✗ Failed to send sensors data");
+        Serial.println("✗ Failed to send data");
     }
 }
 
+
 void publishGeoData() {
-    if (!gpsValid) {
-        Serial.println("GPS not valid, skipping geo data");
-        return;
-    }
-    
-    String topic = device_id + "/geosensors";
-    
-    DynamicJsonDocument doc(300);
-    doc["type"] = "location";
-    doc["latitude"] = latitude;
-    doc["longitude"] = longitude;
-    doc["status"] = generateInsideGeofence ? "inside_geofence" : "outside_geofence";
-    
-    String message;
-    serializeJson(doc, message);
-    
-    if (client.publish(topic, message)) {
-        Serial.println("✓ Location data sent to: " + topic);
-        Serial.println("  GPS: " + String(latitude, 6) + ", " + String(longitude, 6));
-        Serial.println("  Status: " + String(generateInsideGeofence ? "INSIDE" : "OUTSIDE"));
-    } else {
-        Serial.println("✗ Failed to send location data");
-    }
+    // This function is now unused - all data goes to /sensors
 }
 
 void updateLCD() {

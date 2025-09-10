@@ -116,7 +116,7 @@ void loop() {
         lastMillis = millis();
         readSensors();
         publishSensorData();
-        publishGeoData();
+        // publishGeoData(); // REMOVED - now included in publishSensorData
         updateLCD();
     }
     
@@ -196,45 +196,44 @@ void publishSensorData() {
     potSensor["type"] = "potentiometer";
     potSensor["value"] = String(potValue) + " percent";
     
+    // Add latitude and longitude as geolocation sensors
+    if (gpsValid) {
+        JsonObject latSensor = sensors.createNestedObject();
+        latSensor["type"] = "geolocation";
+        latSensor["subtype"] = "latitude";
+        latSensor["value"] = String(latitude, 6);
+        
+        JsonObject lonSensor = sensors.createNestedObject();
+        lonSensor["type"] = "geolocation";
+        lonSensor["subtype"] = "longitude";
+        lonSensor["value"] = String(longitude, 6);
+    }
+    
+    // Add only timestamp - removed device_id and geofence_status
+    doc["timestamp"] = millis();
+    
     // Serialize and send
     String message;
     serializeJson(doc, message);
     
     if (client.publish(topic, message)) {
-        Serial.println("✓ Sensors data sent to: " + topic);
+        Serial.println("✓ All data sent to: " + topic);
         Serial.println("  Temperature: " + String(temperature, 1) + "°C");
         Serial.println("  Humidity: " + String(humidity, 1) + "%");
         Serial.println("  Light: " + String(lightLevel) + "%");
         Serial.println("  Potentiometer: " + String(potValue) + "%");
+        if (gpsValid) {
+            Serial.println("  Latitude: " + String(latitude, 6) + "°");
+            Serial.println("  Longitude: " + String(longitude, 6) + "°");
+        }
     } else {
-        Serial.println("✗ Failed to send sensors data");
+        Serial.println("✗ Failed to send data");
     }
 }
 
+
 void publishGeoData() {
-    if (!gpsValid) {
-        Serial.println("GPS not valid, skipping geo data");
-        return;
-    }
-    
-    String topic = device_id + "/geosensors";
-    
-    DynamicJsonDocument doc(300);
-    doc["type"] = "location";
-    doc["latitude"] = latitude;
-    doc["longitude"] = longitude;
-    doc["status"] = generateInsideGeofence ? "inside_geofence" : "outside_geofence";
-    
-    String message;
-    serializeJson(doc, message);
-    
-    if (client.publish(topic, message)) {
-        Serial.println("✓ Location data sent to: " + topic);
-        Serial.println("  GPS: " + String(latitude, 6) + ", " + String(longitude, 6));
-        Serial.println("  Status: " + String(generateInsideGeofence ? "INSIDE" : "OUTSIDE"));
-    } else {
-        Serial.println("✗ Failed to send location data");
-    }
+    // This function is now unused - all data goes to /sensors
 }
 
 void updateLCD() {

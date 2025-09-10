@@ -1,4 +1,4 @@
-C:\Users\tsigk\Desktop\Ptyxiaki\ptyxiaki-final\ptyxiaki-final\arduino\sensor-monitor\build\libraries\DHT_sensor_library\DHT_U.cpp.o: \
+C:\Users\tsigk\Desktop\Ptyxiaki\ AdminLTE\arduino\sensor-monitor\build\libraries\DHT_sensor_library\DHT_U.cpp.o: \
  C:\Users\tsigk\Documents\Arduino\libraries\DHT_sensor_library\DHT_U.cpp \
  C:\Users\tsigk\Documents\Arduino\libraries\DHT_sensor_library\DHT_U.h \
  C:\Users\tsigk\Documents\Arduino\libraries\Adafruit_Unified_Sensor/Adafruit_Sensor.h \

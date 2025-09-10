@@ -1,4 +1,4 @@
-C:\Users\tsigk\Desktop\Ptyxiaki\ptyxiaki-final\ptyxiaki-final\arduino\sensor-monitor\build\libraries\TinyGPSPlus\TinyGPS++.cpp.o: \
+C:\Users\tsigk\Desktop\Ptyxiaki\ AdminLTE\arduino\sensor-monitor\build\libraries\TinyGPSPlus\TinyGPS++.cpp.o: \
  C:\Users\tsigk\Documents\Arduino\libraries\TinyGPSPlus\src\TinyGPS++.cpp \
  C:\Users\tsigk\Documents\Arduino\libraries\TinyGPSPlus\src\TinyGPS++.h \
  C:\Users\tsigk\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.2.0\cores\esp32/Arduino.h \

@@ -143,11 +143,11 @@ class Sensor extends Model
     /**
      * Update the sensor reading.
      */
-    public function updateReading($value, ?string $timestamp = null): void
+    public function updateReading($value, $timestamp = null): void
     {
         $this->update([
             'value' => $value,
-            'reading_timestamp' => $timestamp ? $timestamp : now(),
+            'reading_timestamp' => $timestamp ?: now(),
         ]);
     }
 

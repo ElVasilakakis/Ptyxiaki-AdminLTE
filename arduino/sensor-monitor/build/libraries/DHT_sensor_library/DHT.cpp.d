@@ -1,4 +1,4 @@
-C:\Users\tsigk\Desktop\Ptyxiaki\ptyxiaki-final\ptyxiaki-final\arduino\sensor-monitor\build\libraries\DHT_sensor_library\DHT.cpp.o: \
+C:\Users\tsigk\Desktop\Ptyxiaki\ AdminLTE\arduino\sensor-monitor\build\libraries\DHT_sensor_library\DHT.cpp.o: \
  C:\Users\tsigk\Documents\Arduino\libraries\DHT_sensor_library\DHT.cpp \
  C:\Users\tsigk\Documents\Arduino\libraries\DHT_sensor_library\DHT.h \
  C:\Users\tsigk\AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.2.0\cores\esp32/Arduino.h \
