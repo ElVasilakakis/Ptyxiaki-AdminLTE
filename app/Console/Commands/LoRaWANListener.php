@@ -24,7 +24,7 @@ class LoRaWANListener extends Command
      *
      * @var string
      */
-    protected $description = 'Listen for LoRaWAN MQTT messages and update sensor data';
+    protected $description = 'Passively listen for real LoRaWAN MQTT messages from device and update sensor data';
 
     // TTN Connection Parameters
     private const TTN_HOST = 'eu1.cloud.thethings.industries';
