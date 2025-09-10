@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use App\Models\Device;
 use App\Models\Sensor;
 use App\Models\MqttBroker;
+use App\Models\Notification;
 use PhpMqtt\Client\MqttClient;
 use PhpMqtt\Client\ConnectionSettings;
 use Illuminate\Support\Facades\Log;
@@ -551,6 +552,9 @@ class DeviceListener extends Command
             $sensor->updateReading($value, $timestamp);
             $sensorsUpdated++;
             
+            // Check for threshold violations and create notifications
+            $this->checkSensorThresholds($sensor, $value);
+            
             $this->line("  📊 {$sensor->sensor_name}: {$value} {$mapping['unit']}");
             
             Log::info('LoRaWAN Sensor Updated via Universal Listener', [
@@ -864,6 +868,64 @@ class DeviceListener extends Command
         return ''; // Unknown unit
     }
 
+    /**
+     * Check sensor thresholds and create notifications if exceeded
+     */
+    private function checkSensorThresholds(Sensor $sensor, $currentValue)
+    {
+        // Only check if alerts are enabled and thresholds are set
+        if (!$sensor->alert_enabled || (!$sensor->alert_threshold_min && !$sensor->alert_threshold_max)) {
+            return;
+        }
+        
+        // Skip non-numeric values
+        if (!is_numeric($currentValue)) {
+            return;
+        }
+        
+        $numericValue = (float)$currentValue;
+        $thresholdViolated = false;
+        $violationType = null;
+        
+        // Check maximum threshold
+        if ($sensor->alert_threshold_max && $numericValue > $sensor->alert_threshold_max) {
+            $thresholdViolated = true;
+            $violationType = 'high';
+        }
+        
+        // Check minimum threshold
+        if ($sensor->alert_threshold_min && $numericValue < $sensor->alert_threshold_min) {
+            $thresholdViolated = true;
+            $violationType = 'low';
+        }
+        
+        if ($thresholdViolated) {
+            // Check if we already have a recent notification for this sensor to avoid spam
+            $recentNotification = Notification::where('sensor_id', $sensor->id)
+                ->where('type', 'threshold_exceeded')
+                ->where('created_at', '>=', Carbon::now()->subMinutes(15)) // Don't spam - wait 15 minutes between notifications
+                ->first();
+            
+            if (!$recentNotification) {
+                // Create threshold violation notification
+                $notification = Notification::createThresholdAlert($sensor, $currentValue, $violationType);
+                
+                $this->warn("🚨 THRESHOLD ALERT: {$sensor->sensor_name} = {$currentValue} {$sensor->unit} (Device: {$sensor->device->name})");
+                
+                Log::warning('Sensor Threshold Exceeded', [
+                    'sensor_id' => $sensor->id,
+                    'sensor_type' => $sensor->sensor_type,
+                    'device_id' => $sensor->device->device_id,
+                    'current_value' => $currentValue,
+                    'threshold_min' => $sensor->alert_threshold_min,
+                    'threshold_max' => $sensor->alert_threshold_max,
+                    'violation_type' => $violationType,
+                    'notification_id' => $notification->id
+                ]);
+            }
+        }
+    }
+    
     /**
      * Start the main listening loop
      */

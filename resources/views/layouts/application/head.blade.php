@@ -23,5 +23,6 @@
 
 	<script src="{{asset('assets/js/app.js')}}"></script>
 	<script src="{{asset('assets/demo/pages/datatables_basic.js')}}"></script>
+	<script src="{{asset('assets/js/notifications.js')}}"></script>
     @yield('imports')
 </head>

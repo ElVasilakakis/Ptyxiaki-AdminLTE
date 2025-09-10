@@ -37,11 +37,35 @@
         </div>
 
         <ul class="nav gap-sm-2 order-1 order-lg-2 ms-auto">
-            <li class="nav-item">
-                <a href="#" class="navbar-nav-link navbar-nav-link-icon rounded">
+            <li class="nav-item dropdown">
+                <a href="#" class="navbar-nav-link navbar-nav-link-icon rounded" data-bs-toggle="dropdown" id="notificationDropdown">
                     <i class="ph-bell"></i>
-                    <span class="badge bg-yellow text-black position-absolute top-0 end-0 translate-middle-top zindex-1 rounded-pill mt-1 me-1">2</span>
+                    <span class="badge bg-yellow text-black position-absolute top-0 end-0 translate-middle-top zindex-1 rounded-pill mt-1 me-1" id="notificationBadge" style="display: none;">0</span>
                 </a>
+                
+                <div class="dropdown-menu dropdown-menu-end" style="width: 350px; max-height: 400px; overflow-y: auto;">
+                    <div class="dropdown-header d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold">Notifications</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="markAllReadBtn" style="display: none;">
+                            Mark all read
+                        </button>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    
+                    <div id="notificationsList">
+                        <div class="dropdown-item-text text-center py-3" id="noNotifications">
+                            <i class="ph-bell-slash text-muted mb-2 d-block" style="font-size: 2rem;"></i>
+                            <span class="text-muted">No notifications</span>
+                        </div>
+                    </div>
+                    
+                    <div class="dropdown-divider" id="notificationsDivider" style="display: none;"></div>
+                    <div class="dropdown-item text-center" id="notificationsFooter" style="display: none;">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="clearReadBtn">
+                            Clear read notifications
+                        </button>
+                    </div>
+                </div>
             </li>
             <li class="nav-item">
                 <a href="#" class="navbar-nav-link navbar-nav-link-icon rounded">

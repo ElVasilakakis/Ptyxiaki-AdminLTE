@@ -19,4 +19,15 @@ Route::middleware('web')->group(function () {
     Route::get('/sensors/live', [App\Http\Controllers\Application\SensorsController::class, 'getLiveSensorData']);
     Route::get('/devices/{device}/sensors', [App\Http\Controllers\Application\DevicesController::class, 'getSensorData']);
     Route::get('/lands/{land}/devices', [App\Http\Controllers\Application\LandsController::class, 'getLiveDeviceData']);
+    Route::get('/dashboard/data', [App\Http\Controllers\Application\DashboardController::class, 'getDashboardData']);
+    
+    // Notification endpoints
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [App\Http\Controllers\Application\NotificationController::class, 'index']);
+        Route::get('/unread-count', [App\Http\Controllers\Application\NotificationController::class, 'getUnreadCount']);
+        Route::post('/{id}/mark-read', [App\Http\Controllers\Application\NotificationController::class, 'markAsRead']);
+        Route::post('/mark-all-read', [App\Http\Controllers\Application\NotificationController::class, 'markAllAsRead']);
+        Route::delete('/{id}', [App\Http\Controllers\Application\NotificationController::class, 'destroy']);
+        Route::delete('/clear-read', [App\Http\Controllers\Application\NotificationController::class, 'clearRead']);
+    });
 });

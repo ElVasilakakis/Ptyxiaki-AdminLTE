@@ -146,7 +146,7 @@
                                 <button type="submit" class="btn btn-teal w-100">Register</button>
 
                                 <div class="text-center mt-3">
-                                    <a href="{{ route('auth.login') }}">Already have an account? Sign in</a>
+                                    <a href="{{ route('login') }}">Already have an account? Sign in</a>
                                 </div>
                             </div>
                         </div>
