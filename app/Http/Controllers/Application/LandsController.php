@@ -187,4 +187,69 @@ class LandsController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get live device data for a land (for map updates)
+     */
+    public function getLiveDeviceData(Land $land)
+    {
+        // Ensure user can only get data for their own lands
+        if ($land->user_id !== Auth::id()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        try {
+            // Load devices with their sensors and latest readings
+            $devices = $land->devices()
+                ->with(['sensors' => function($query) {
+                    $query->orderBy('reading_timestamp', 'desc');
+                }])
+                ->get()
+                ->map(function($device) {
+                    return [
+                        'id' => $device->id,
+                        'name' => $device->name,
+                        'device_id' => $device->device_id,
+                        'device_type' => $device->device_type,
+                        'status' => $device->status,
+                        'last_seen_at' => $device->last_seen_at?->toISOString(),
+                        'sensors' => $device->sensors->map(function($sensor) {
+                            return [
+                                'id' => $sensor->id,
+                                'sensor_type' => $sensor->sensor_type,
+                                'sensor_name' => $sensor->sensor_name,
+                                'value' => $sensor->value,
+                                'unit' => $sensor->unit,
+                                'formatted_value' => $sensor->getFormattedValue(),
+                                'alert_enabled' => $sensor->alert_enabled,
+                                'alert_status' => $sensor->getAlertStatus(),
+                                'reading_timestamp' => $sensor->reading_timestamp?->toISOString(),
+                            ];
+                        })
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'devices' => $devices,
+                'land' => [
+                    'id' => $land->id,
+                    'name' => $land->land_name,
+                    'enabled' => $land->enabled,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error getting live device data for land: ' . $e->getMessage(), [
+                'land_id' => $land->id,
+                'error' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get device data',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
 }

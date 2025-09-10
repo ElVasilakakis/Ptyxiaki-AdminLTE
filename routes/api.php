@@ -18,4 +18,5 @@ Route::post('/lorawan/test-webhook', [LoRaWANController::class, 'testWebhook']);
 Route::middleware('web')->group(function () {
     Route::get('/sensors/live', [App\Http\Controllers\Application\SensorsController::class, 'getLiveSensorData']);
     Route::get('/devices/{device}/sensors', [App\Http\Controllers\Application\DevicesController::class, 'getSensorData']);
+    Route::get('/lands/{land}/devices', [App\Http\Controllers\Application\LandsController::class, 'getLiveDeviceData']);
 });
