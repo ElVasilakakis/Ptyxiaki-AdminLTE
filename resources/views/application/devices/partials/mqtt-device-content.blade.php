@@ -2,16 +2,7 @@
     <h6 class="mb-0">Device: {{ $device->name }}</h6>
     <div class="d-flex align-items-center gap-2">
         <div id="location-status" class="location-status unknown">Location Status Unknown</div>
-        <div id="mqtt-status" class="mqtt-status disconnected">Disconnected</div>
-        <button type="button" id="test-btn" class="btn btn-success" style="display: none;">
-            <i class="ph-paper-plane me-2"></i>Send Test
-        </button>
-        <button type="button" id="pause-btn" class="btn btn-warning" style="display: none;">
-            <i class="ph-pause me-2"></i>Pause
-        </button>
-        <button type="button" id="connect-btn" class="btn btn-primary">
-            Connect
-        </button>
+        <div class="badge bg-info">MQTT Device</div>
     </div>
 </div>
 

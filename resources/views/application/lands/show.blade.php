@@ -169,6 +169,14 @@
                                     <span class="ms-2">Device with Alerts</span>
                                 </div>
                             </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <div class="legend-item" style="width: 20px; height: 20px; background-color: #ef4444; border-radius: 50%; position: relative;">
+                                        <div style="position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; background-color: #fbbf24; border-radius: 50%; animation: pulse 1s infinite;"></div>
+                                    </div>
+                                    <span class="ms-2">Outside Geofence</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -407,6 +415,72 @@
             console.log(`✅ Added ${Object.keys(deviceMarkers).length} device markers`);
         }
         
+        // Check if a point is inside the land polygon (geofence detection)
+        function isDeviceInsideGeofence(lat, lng) {
+            if (!landLayer || !landData.geojson) {
+                return true; // If no geofence defined, assume inside
+            }
+            
+            try {
+                const point = L.latLng(lat, lng);
+                const layers = landLayer.getLayers();
+                
+                for (let layer of layers) {
+                    if (layer.getBounds && layer.getBounds().contains(point)) {
+                        // More precise check using ray casting algorithm
+                        if (layer.feature && layer.feature.geometry) {
+                            return isPointInPolygon([lng, lat], layer.feature.geometry);
+                        }
+                    }
+                }
+                return false;
+            } catch (error) {
+                console.warn('Error checking geofence:', error);
+                return true; // Default to inside if error
+            }
+        }
+        
+        // Ray casting algorithm to check if point is inside polygon
+        function isPointInPolygon(point, polygon) {
+            const [x, y] = point;
+            let inside = false;
+            
+            // Handle different geometry types
+            let coordinates;
+            if (polygon.type === 'Polygon') {
+                coordinates = polygon.coordinates[0]; // Use outer ring
+            } else if (polygon.type === 'MultiPolygon') {
+                // Check all polygons in multipolygon
+                for (let poly of polygon.coordinates) {
+                    if (isPointInPolygonCoords(point, poly[0])) {
+                        return true;
+                    }
+                }
+                return false;
+            } else {
+                return true; // Unknown geometry type, assume inside
+            }
+            
+            return isPointInPolygonCoords(point, coordinates);
+        }
+        
+        // Helper function for point-in-polygon check
+        function isPointInPolygonCoords(point, coordinates) {
+            const [x, y] = point;
+            let inside = false;
+            
+            for (let i = 0, j = coordinates.length - 1; i < coordinates.length; j = i++) {
+                const [xi, yi] = coordinates[i];
+                const [xj, yj] = coordinates[j];
+                
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+                    inside = !inside;
+                }
+            }
+            
+            return inside;
+        }
+        
         // Add individual device marker
         function addDeviceMarker(device) {
             // Find GPS coordinates from sensors
@@ -426,25 +500,49 @@
                 return;
             }
             
-            // Determine marker color based on device status and alerts
+            // Check if device is inside geofence
+            const isInsideGeofence = isDeviceInsideGeofence(lat, lng);
+            
+            // Determine marker color based on device status, alerts, and geofence
             let markerColor = '#6b7280'; // Default gray (offline)
             let markerIcon = 'ph-device-mobile';
+            let hasSignal = false;
             
-            if (device.status === 'online') {
-                markerColor = '#16a34a'; // Green (online)
-            }
-            
-            // Check for alerts
+            // Check for alerts first
             const hasAlerts = device.sensors.some(sensor => {
                 return sensor.alert_enabled && sensor.alert_status && sensor.alert_status !== 'normal';
             });
             
-            if (hasAlerts) {
-                markerColor = '#dc2626'; // Red (alerts)
+            if (!isInsideGeofence) {
+                // Device is outside geofence - red with signal
+                markerColor = '#ef4444';
+                markerIcon = 'ph-warning-octagon';
+                hasSignal = true;
+            } else if (hasAlerts) {
+                // Device has alerts - red
+                markerColor = '#dc2626';
                 markerIcon = 'ph-warning-circle';
+            } else if (device.status === 'online') {
+                // Device is online - green
+                markerColor = '#16a34a';
+                markerIcon = 'ph-device-mobile';
             }
             
-            // Create custom marker
+            // Create custom marker with optional signal indicator
+            const signalIndicator = hasSignal ? `
+                <div style="
+                    position: absolute; 
+                    top: -3px; 
+                    right: -3px; 
+                    width: 12px; 
+                    height: 12px; 
+                    background-color: #fbbf24; 
+                    border-radius: 50%; 
+                    border: 2px solid white;
+                    animation: pulse 1s infinite;
+                "></div>
+            ` : '';
+            
             const markerHtml = `
                 <div style="
                     background-color: ${markerColor}; 
@@ -457,8 +555,10 @@
                     border: 3px solid white; 
                     box-shadow: 0 2px 6px rgba(0,0,0,0.3);
                     cursor: pointer;
+                    position: relative;
                 ">
                     <i class="${markerIcon}" style="color: white; font-size: 16px;"></i>
+                    ${signalIndicator}
                 </div>
             `;
             
@@ -472,23 +572,33 @@
             // Create marker
             const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
             
-            // Create popup content
-            const popupContent = createDevicePopup(device);
+            // Create popup content with geofence status
+            const popupContent = createDevicePopup(device, isInsideGeofence);
             marker.bindPopup(popupContent);
             
             // Store marker reference
             deviceMarkers[device.id] = marker;
             
-            console.log(`📍 Added marker for device ${device.name} at ${lat}, ${lng}`);
+            const geofenceStatus = isInsideGeofence ? 'inside' : 'OUTSIDE';
+            console.log(`📍 Added marker for device ${device.name} at ${lat}, ${lng} (${geofenceStatus} geofence)`);
         }
         
         // Create device popup content
-        function createDevicePopup(device) {
+        function createDevicePopup(device, isInsideGeofence = null) {
             const latSensor = device.sensors.find(s => s.sensor_type === 'latitude');
             const lngSensor = device.sensors.find(s => s.sensor_type === 'longitude');
             const tempSensor = device.sensors.find(s => s.sensor_type === 'temperature');
             const humiditySensor = device.sensors.find(s => s.sensor_type === 'humidity');
             const batterySensor = device.sensors.find(s => s.sensor_type === 'battery');
+            
+            // Check geofence status if not provided
+            if (isInsideGeofence === null && latSensor && lngSensor) {
+                const lat = parseFloat(latSensor.value);
+                const lng = parseFloat(lngSensor.value);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    isInsideGeofence = isDeviceInsideGeofence(lat, lng);
+                }
+            }
             
             const alertSensors = device.sensors.filter(sensor => {
                 return sensor.alert_enabled && sensor.alert_status && sensor.alert_status !== 'normal';
@@ -509,7 +619,19 @@
                             ${device.status.charAt(0).toUpperCase() + device.status.slice(1)}
                         </span>
                         <span class="badge bg-info">${device.device_type}</span>
+                        ${isInsideGeofence === false ? `
+                            <span class="badge bg-danger ms-1">
+                                <i class="ph-warning-octagon me-1"></i>Outside Geofence
+                            </span>
+                        ` : ''}
                     </div>
+                    
+                    ${!isInsideGeofence ? `
+                        <div class="alert alert-danger py-2 mb-2">
+                            <i class="ph-warning-octagon me-1"></i>
+                            <strong>Device is outside the land boundary!</strong>
+                        </div>
+                    ` : ''}
                     
                     ${alertSensors.length > 0 ? `
                         <div class="alert alert-warning py-2 mb-2">
@@ -546,6 +668,13 @@
                     <div class="mb-2">
                         <small class="text-muted">Location</small>
                         <div class="small">${latSensor ? parseFloat(latSensor.value).toFixed(6) : 'N/A'}, ${lngSensor ? parseFloat(lngSensor.value).toFixed(6) : 'N/A'}</div>
+                        ${isInsideGeofence !== null ? `
+                            <div class="small mt-1">
+                                <span class="badge bg-${isInsideGeofence ? 'success' : 'danger'} badge-sm">
+                                    ${isInsideGeofence ? 'Inside Geofence' : 'Outside Geofence'}
+                                </span>
+                            </div>
+                        ` : ''}
                     </div>
                     
                     <div class="d-flex gap-2 mt-3">

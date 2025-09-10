@@ -35,7 +35,7 @@ MQTTClient client(1024);
 unsigned long lastMillis = 0;
 
 // Device Configuration
-const String device_id = "ESP32-DEV-001";
+const String device_id = "sensor_device_1_5841";
 
 // Sensor variables
 float temperature = 0.0;
@@ -74,12 +74,10 @@ void setup() {
     // Generate initial GPS data
     generateGPSData();
     
-    Serial.println("=== ESP32 GEOFENCE DEVICE READY ===");
+    Serial.println("=== ESP32 SENSOR DEVICE READY ===");
     Serial.println("Device ID: " + device_id);
-    Serial.println("Sending to channels:");
-    Serial.println("- " + device_id + "/sensors");
-    Serial.println("- " + device_id + "/geosensors");
-    Serial.println("===================================");
+    Serial.println("Sending all data to: " + device_id + "/sensors");
+    Serial.println("==================================");
     
     lcd.clear();
     lcd.setCursor(0, 0);
@@ -116,7 +114,6 @@ void loop() {
         lastMillis = millis();
         readSensors();
         publishSensorData();
-        // publishGeoData(); // REMOVED - now included in publishSensorData
         updateLCD();
     }
     
@@ -173,7 +170,7 @@ void publishSensorData() {
     String topic = device_id + "/sensors";
     
     // Create JSON document with sensors array
-    DynamicJsonDocument doc(800);
+    DynamicJsonDocument doc(1024);
     JsonArray sensors = doc.createNestedArray("sensors");
     
     // Add temperature sensor
@@ -196,20 +193,22 @@ void publishSensorData() {
     potSensor["type"] = "potentiometer";
     potSensor["value"] = String(potValue) + " percent";
     
-    // Add latitude and longitude as geolocation sensors
+    // Add GPS coordinates as geolocation sensors
     if (gpsValid) {
+        // Latitude sensor
         JsonObject latSensor = sensors.createNestedObject();
         latSensor["type"] = "geolocation";
         latSensor["subtype"] = "latitude";
         latSensor["value"] = String(latitude, 6);
         
+        // Longitude sensor
         JsonObject lonSensor = sensors.createNestedObject();
         lonSensor["type"] = "geolocation";
         lonSensor["subtype"] = "longitude";
         lonSensor["value"] = String(longitude, 6);
     }
     
-    // Add only timestamp - removed device_id and geofence_status
+    // Add timestamp
     doc["timestamp"] = millis();
     
     // Serialize and send
@@ -217,7 +216,7 @@ void publishSensorData() {
     serializeJson(doc, message);
     
     if (client.publish(topic, message)) {
-        Serial.println("✓ All data sent to: " + topic);
+        Serial.println("✓ Sensor data sent to: " + topic);
         Serial.println("  Temperature: " + String(temperature, 1) + "°C");
         Serial.println("  Humidity: " + String(humidity, 1) + "%");
         Serial.println("  Light: " + String(lightLevel) + "%");
@@ -226,25 +225,24 @@ void publishSensorData() {
             Serial.println("  Latitude: " + String(latitude, 6) + "°");
             Serial.println("  Longitude: " + String(longitude, 6) + "°");
         }
+        Serial.println("  JSON: " + message);
     } else {
-        Serial.println("✗ Failed to send data");
+        Serial.println("✗ Failed to send sensor data");
     }
-}
-
-
-void publishGeoData() {
-    // This function is now unused - all data goes to /sensors
 }
 
 void updateLCD() {
     lcd.clear();
     
-    // First line: GPS coordinates
+    // First line: Temperature and Humidity
     lcd.setCursor(0, 0);
-    lcd.print("GPS: " + String(latitude, 4));
+    lcd.print("T:" + String(temperature, 1) + " H:" + String(humidity, 1));
     
-    // Second line: Status and longitude
+    // Second line: GPS coordinates
     lcd.setCursor(0, 1);
-    String status = generateInsideGeofence ? "IN" : "OUT";
-    lcd.print(status + ": " + String(longitude, 4));
+    if (gpsValid) {
+        lcd.print("GPS: " + String(latitude, 2) + "," + String(longitude, 2));
+    } else {
+        lcd.print("GPS: No signal");
+    }
 }

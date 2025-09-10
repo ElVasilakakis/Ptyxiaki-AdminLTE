@@ -466,8 +466,13 @@ class DeviceListener extends Command
         $device->setOnline();
         $this->info("✅ MQTT device '{$device->device_id}' status updated to online");
         
-        // Process sensor readings
-        $sensorsUpdated = $this->processMQTTSensorReadings($device, $payload, $topic);
+        // Check if this is the new sensor array format
+        if (isset($payload['sensors']) && is_array($payload['sensors'])) {
+            $sensorsUpdated = $this->processSensorArrayMessage($device, $payload, $topic);
+        } else {
+            // Process as flat JSON payload
+            $sensorsUpdated = $this->processMQTTSensorReadings($device, $payload, $topic);
+        }
         
         $this->info("🎯 Updated {$sensorsUpdated} sensors for MQTT device '{$device->device_id}'");
     }
@@ -558,6 +563,138 @@ class DeviceListener extends Command
         }
         
         return $sensorsUpdated;
+    }
+
+    /**
+     * Process sensor array message format
+     */
+    private function processSensorArrayMessage(Device $device, array $payload, $topic)
+    {
+        $sensorsUpdated = 0;
+        $timestamp = Carbon::now();
+        
+        if (!isset($payload['sensors']) || !is_array($payload['sensors'])) {
+            $this->warn("⚠️ Invalid sensor array format");
+            return 0;
+        }
+        
+        foreach ($payload['sensors'] as $sensorData) {
+            if (!isset($sensorData['type']) || !isset($sensorData['value'])) {
+                $this->warn("⚠️ Sensor missing type or value: " . json_encode($sensorData));
+                continue;
+            }
+            
+            $sensorType = $sensorData['type'];
+            $sensorValue = $sensorData['value'];
+            
+            // Handle geolocation sensors with subtype
+            if ($sensorType === 'geolocation' && isset($sensorData['subtype'])) {
+                $sensorType = $sensorData['subtype']; // Use latitude or longitude as type
+            }
+            
+            // Parse value (remove units if present)
+            $cleanValue = $this->parseValueFromString($sensorValue);
+            
+            // Determine sensor info
+            $sensorInfo = $this->determineSensorInfoFromType($sensorType, $cleanValue);
+            
+            if (!$sensorInfo) {
+                $this->warn("⚠️ Unknown sensor type: {$sensorType}");
+                continue;
+            }
+            
+            // Find or create sensor
+            $sensor = Sensor::firstOrCreate(
+                [
+                    'device_id' => $device->id,
+                    'sensor_type' => $sensorInfo['type'],
+                    'sensor_name' => $sensorInfo['name']
+                ],
+                [
+                    'user_id' => $device->user_id,
+                    'description' => 'MQTT ' . $sensorInfo['name'] . ' sensor',
+                    'location' => $device->location,
+                    'unit' => $sensorInfo['unit'],
+                    'enabled' => true,
+                    'alert_enabled' => false,
+                ]
+            );
+            
+            // Update sensor reading
+            $sensor->updateReading($cleanValue, $timestamp);
+            $sensorsUpdated++;
+            
+            $this->line("  📊 {$sensor->sensor_name}: {$cleanValue} {$sensorInfo['unit']}");
+            
+            Log::info('MQTT Sensor Array Updated via Universal Listener', [
+                'device_id' => $device->device_id,
+                'sensor_type' => $sensorInfo['type'],
+                'sensor_name' => $sensor->sensor_name,
+                'value' => $cleanValue,
+                'original_value' => $sensorValue,
+                'timestamp' => $timestamp->toDateTimeString()
+            ]);
+        }
+        
+        return $sensorsUpdated;
+    }
+
+    /**
+     * Parse numeric value from string (remove units)
+     */
+    private function parseValueFromString($value)
+    {
+        if (is_numeric($value)) {
+            return (float)$value;
+        }
+        
+        // Extract numeric value from strings like "25.3 celsius" or "65 percent"
+        if (preg_match('/^([+-]?\d*\.?\d+)/', $value, $matches)) {
+            return (float)$matches[1];
+        }
+        
+        return $value; // Return as-is if not numeric
+    }
+
+    /**
+     * Determine sensor info from sensor type
+     */
+    private function determineSensorInfoFromType($sensorType, $value)
+    {
+        $sensorMappings = [
+            // Temperature sensors
+            'thermal' => ['type' => 'thermal', 'name' => 'Thermal Sensor', 'unit' => '°C'],
+            'temperature' => ['type' => 'temperature', 'name' => 'Temperature', 'unit' => '°C'],
+            
+            // Humidity sensors
+            'humidity' => ['type' => 'humidity', 'name' => 'Humidity', 'unit' => '%'],
+            
+            // Light sensors
+            'light' => ['type' => 'light', 'name' => 'Light', 'unit' => '%'],
+            
+            // Potentiometer
+            'potentiometer' => ['type' => 'potentiometer', 'name' => 'Potentiometer', 'unit' => '%'],
+            
+            // GPS sensors
+            'latitude' => ['type' => 'latitude', 'name' => 'Latitude', 'unit' => '°'],
+            'longitude' => ['type' => 'longitude', 'name' => 'Longitude', 'unit' => '°'],
+            
+            // Generic geolocation
+            'geolocation' => ['type' => 'geolocation', 'name' => 'Geolocation', 'unit' => '°'],
+        ];
+        
+        $lowerType = strtolower($sensorType);
+        
+        if (isset($sensorMappings[$lowerType])) {
+            return $sensorMappings[$lowerType];
+        }
+        
+        // If not found in mappings, create generic sensor
+        return [
+            'type' => $lowerType,
+            'name' => ucfirst(str_replace('_', ' ', $sensorType)),
+            'unit' => $this->guessUnitFromValue($value)
+        ];
     }
 
     /**
