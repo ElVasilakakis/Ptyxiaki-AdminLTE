@@ -18,7 +18,6 @@ class Device extends Model
         'mqtt_broker_id',
         'land_id',
         'user_id',
-        'location',
         'status',
         'last_seen_at',
         'installed_at',
@@ -34,7 +33,6 @@ class Device extends Model
     ];
 
     protected $casts = [
-        'location' => 'array',
         'last_seen_at' => 'datetime',
         'installed_at' => 'datetime',
         'topics' => 'array',
@@ -136,35 +134,6 @@ class Device extends Model
         return $this->is_active;
     }
 
-    /**
-     * Get the device's coordinates from location GeoJSON.
-     */
-    public function getCoordinates(): ?array
-    {
-        if (!$this->location || !isset($this->location['coordinates'])) {
-            return null;
-        }
-
-        return $this->location['coordinates'];
-    }
-
-    /**
-     * Get the device's latitude.
-     */
-    public function getLatitude(): ?float
-    {
-        $coordinates = $this->getCoordinates();
-        return $coordinates ? $coordinates[1] : null;
-    }
-
-    /**
-     * Get the device's longitude.
-     */
-    public function getLongitude(): ?float
-    {
-        $coordinates = $this->getCoordinates();
-        return $coordinates ? $coordinates[0] : null;
-    }
 
     /**
      * Update the device's last seen timestamp.

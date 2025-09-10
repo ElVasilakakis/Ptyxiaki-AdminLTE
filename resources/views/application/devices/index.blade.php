@@ -188,7 +188,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <th>Device Information</th>
                                 <th>Connection Details</th>
                                 <th>Status</th>
-                                <th>Location</th>
                                 <th>Sensors</th>
                                 <th>Last Activity</th>
                                 <th class="text-center">Actions</th>
@@ -292,28 +291,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                                 </button>
                                             </div>
                                         </div>
-                                    </td>
-                                    <td>
-                                        @if($device->getLatitude() && $device->getLongitude())
-                                            <div class="text-body fw-semibold">
-                                                <i class="ph-map-pin me-1 text-danger"></i>
-                                                Located
-                                            </div>
-                                            <div class="text-muted fs-sm">
-                                                {{ number_format($device->getLatitude(), 6) }}, {{ number_format($device->getLongitude(), 6) }}
-                                            </div>
-                                        @else
-                                            <div class="text-muted">
-                                                <i class="ph-map-pin me-1"></i>
-                                                No location set
-                                            </div>
-                                        @endif
-                                        @if($device->installed_at)
-                                            <div class="text-success fs-xs mt-1">
-                                                <i class="ph-calendar me-1"></i>
-                                                Installed {{ $device->installed_at->format('M d, Y') }}
-                                            </div>
-                                        @endif
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center">
