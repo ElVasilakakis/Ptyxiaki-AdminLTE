@@ -44,7 +44,7 @@
                     <a href="{{ route('app.lands.index') }}" class="nav-link {{ request()->routeIs('app.lands.*') ? 'active' : '' }}">
                         <i class="ph-map-pin-line"></i>
                         <span>Lands</span>
-                        <span class="badge bg-primary align-self-center rounded-pill ms-auto">5</span>
+                        {{-- <span class="badge bg-primary align-self-center rounded-pill ms-auto">5</span> --}}
                     </a>
                 </li>
                 <li class="nav-item">
@@ -76,7 +76,7 @@
                     <i class="ph-dots-three sidebar-resize-show"></i>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link">
+                    <a href="{{route('app.documentation')}}" class="nav-link">
                         <i class="ph-file-code"></i>
                         <span>How To</span>
                     </a>

@@ -52,19 +52,8 @@ class MQTTListener extends Command
         }
 
         try {
-            // Discover and connect to MQTT brokers
-            $brokersCount = $this->discoverAndConnectToBrokers($specificBrokerId, $specificDeviceId);
-            
-            if ($brokersCount === 0) {
-                $this->warn("⚠️ No MQTT brokers found to connect to");
-                return 1;
-            }
-            
-            $this->info("✅ Connected to {$brokersCount} MQTT broker(s) successfully!");
-            $this->info("🔄 Listening for messages... (Press Ctrl+C to stop)");
-            
-            // Main listening loop
-            $this->startListening();
+            // Main listening loop with broker discovery
+            $this->startListeningWithDiscovery($specificBrokerId, $specificDeviceId);
             
         } catch (\Exception $e) {
             $this->error("❌ Failed to start MQTT listener: " . $e->getMessage());
@@ -519,6 +508,62 @@ class MQTTListener extends Command
         }
         
         return ''; // Unknown unit
+    }
+
+    /**
+     * Start listening with continuous broker discovery
+     */
+    private function startListeningWithDiscovery($specificBrokerId = null, $specificDeviceId = null)
+    {
+        $lastDiscoveryTime = 0;
+        $discoveryInterval = 30; // Check for new brokers every 30 seconds
+        $hasConnectedBrokers = false;
+        
+        $this->info("🔄 Starting continuous listening mode... (Press Ctrl+C to stop)");
+        
+        while ($this->isRunning) {
+            try {
+                $currentTime = time();
+                
+                // Periodically discover and connect to new brokers
+                if ($currentTime - $lastDiscoveryTime >= $discoveryInterval) {
+                    $brokersCount = $this->discoverAndConnectToBrokers($specificBrokerId, $specificDeviceId);
+                    
+                    if ($brokersCount > 0) {
+                        if (!$hasConnectedBrokers) {
+                            $this->info("✅ Connected to {$brokersCount} MQTT broker(s) successfully!");
+                            $hasConnectedBrokers = true;
+                        }
+                    } else {
+                        if (!$hasConnectedBrokers) {
+                            $this->warn("⚠️ No MQTT brokers found - waiting for brokers to be registered...");
+                        }
+                    }
+                    
+                    $lastDiscoveryTime = $currentTime;
+                }
+                
+                // Process MQTT messages for all connected brokers
+                if (!empty($this->mqttClients)) {
+                    foreach ($this->mqttClients as $brokerId => $mqttClient) {
+                        $mqttClient->loop(true, true);
+                    }
+                    // Small delay to prevent high CPU usage when processing messages
+                    usleep(100000); // 0.1 seconds
+                } else {
+                    // Longer delay when no brokers are connected to reduce CPU usage
+                    sleep(5);
+                }
+                
+            } catch (\Exception $e) {
+                $this->error("❌ Error in listening loop: " . $e->getMessage());
+                Log::error('MQTT Loop Error', ['error' => $e->getMessage()]);
+                
+                // Try to reconnect after error
+                sleep(5);
+                $this->attemptReconnection();
+            }
+        }
     }
 
     /**

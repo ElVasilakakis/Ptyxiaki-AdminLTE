@@ -54,19 +54,8 @@ class LoRaWANListener extends Command
             // Setup MQTT connection
             $this->setupMqttConnection();
             
-            // Discover and subscribe to device topics
-            $devicesCount = $this->discoverAndSubscribeToDevices($specificDeviceId);
-            
-            if ($devicesCount === 0) {
-                $this->warn("⚠️ No LoRaWAN devices found to listen to");
-                return 1;
-            }
-            
-            $this->info("✅ Connected and subscribed to {$devicesCount} device(s) successfully!");
-            $this->info("🔄 Listening for messages... (Press Ctrl+C to stop)");
-            
-            // Main listening loop
-            $this->startListening();
+            // Main listening loop with device discovery
+            $this->startListeningWithDiscovery($specificDeviceId);
             
         } catch (\Exception $e) {
             $this->error("❌ Failed to start MQTT listener: " . $e->getMessage());
@@ -318,6 +307,65 @@ class LoRaWANListener extends Command
         }
         
         return $sensorsUpdated;
+    }
+
+    /**
+     * Start listening with continuous device discovery
+     */
+    private function startListeningWithDiscovery($specificDeviceId = null)
+    {
+        $lastDiscoveryTime = 0;
+        $discoveryInterval = 30; // Check for new devices every 30 seconds
+        $hasConnectedDevices = false;
+        
+        $this->info("🔄 Starting continuous listening mode... (Press Ctrl+C to stop)");
+        
+        while ($this->isRunning) {
+            try {
+                $currentTime = time();
+                
+                // Periodically discover and subscribe to new devices
+                if ($currentTime - $lastDiscoveryTime >= $discoveryInterval) {
+                    $devicesCount = $this->discoverAndSubscribeToDevices($specificDeviceId);
+                    
+                    if ($devicesCount > 0) {
+                        if (!$hasConnectedDevices) {
+                            $this->info("✅ Connected and subscribed to {$devicesCount} device(s) successfully!");
+                            $hasConnectedDevices = true;
+                        }
+                    } else {
+                        if (!$hasConnectedDevices) {
+                            $this->warn("⚠️ No LoRaWAN devices found - waiting for devices to be registered...");
+                        }
+                    }
+                    
+                    $lastDiscoveryTime = $currentTime;
+                }
+                
+                // Process MQTT messages if we have an active connection
+                if ($this->mqttClient) {
+                    $this->mqttClient->loop(true, true);
+                    // Small delay to prevent high CPU usage when processing messages
+                    usleep(100000); // 0.1 seconds
+                } else {
+                    // Longer delay when no connection is available to reduce CPU usage
+                    sleep(5);
+                }
+                
+            } catch (\Exception $e) {
+                $this->error("❌ Error in listening loop: " . $e->getMessage());
+                Log::error('LoRaWAN MQTT Loop Error', ['error' => $e->getMessage()]);
+                
+                // Try to reconnect after error
+                sleep(5);
+                try {
+                    $this->setupMqttConnection();
+                    $this->info("🔄 Reconnected to MQTT broker");
+                } catch (\Exception $reconnectError) {
+                    $this->error("❌ Failed to reconnect: " . $reconnectError->getMessage());
+                }
+            }
+        }
     }
 
     /**

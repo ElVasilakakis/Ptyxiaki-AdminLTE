@@ -39,6 +39,11 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
     });   
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('app.dashboard');
+    
+    // Documentation Route
+    Route::get('/documentation', function () {
+        return view('application.documentation');
+    })->name('app.documentation');
 
     Route::group(['prefix' => 'lands'], function () {
         Route::get('/', [LandsController::class, 'index'])->name('app.lands.index');

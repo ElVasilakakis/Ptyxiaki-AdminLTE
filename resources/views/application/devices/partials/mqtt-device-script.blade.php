@@ -34,7 +34,20 @@
                     let defaultLng = 21.8243;
                     let defaultZoom = 6;
 
-                    if (device.current_location && device.current_location.coordinates) {
+                    // Check for latitude and longitude from sensor data
+                    const latSensor = previousSensors.find(s => s.sensor_type.toLowerCase().includes('latitude') || s.sensor_type.toLowerCase().includes('lat'));
+                    const lngSensor = previousSensors.find(s => s.sensor_type.toLowerCase().includes('longitude') || s.sensor_type.toLowerCase().includes('lng') || s.sensor_type.toLowerCase().includes('lon'));
+                    
+                    if (latSensor && lngSensor && latSensor.value !== null && lngSensor.value !== null) {
+                        const lat = parseFloat(latSensor.value);
+                        const lng = parseFloat(lngSensor.value);
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            defaultLat = lat;
+                            defaultLng = lng;
+                            defaultZoom = 13;
+                            console.log('📍 Using sensor location data:', defaultLat, defaultLng);
+                        }
+                    } else if (device.current_location && device.current_location.coordinates) {
                         defaultLat = device.current_location.coordinates[1];
                         defaultLng = device.current_location.coordinates[0];
                         defaultZoom = 13;
@@ -77,7 +90,15 @@
                         }
                     }
 
-                    if (device.current_location && device.current_location.coordinates) {
+                    // Add device marker based on sensor data first, then fallback to device location
+                    if (latSensor && lngSensor && latSensor.value !== null && lngSensor.value !== null) {
+                        const lat = parseFloat(latSensor.value);
+                        const lng = parseFloat(lngSensor.value);
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            addDeviceMarker(lat, lng, 'Location from sensors');
+                            updateLocationStatus(lat, lng);
+                        }
+                    } else if (device.current_location && device.current_location.coordinates) {
                         const lat = device.current_location.coordinates[1];
                         const lng = device.current_location.coordinates[0];
                         addDeviceMarker(lat, lng, 'Last known location');
@@ -568,6 +589,9 @@
                     addSensorTableRow(sensor);
                     console.log('➕ Added new table row for:', sensor.sensor_type);
                 }
+
+                // Check if this is a location sensor and update map
+                checkAndUpdateLocationFromSensors(sensor);
             }
 
             // Add new sensor row to table
@@ -667,13 +691,31 @@
             }
 
             function checkLocationStatus(lat, lng) {
-                // Check if point is within GeoJSON boundaries
+                // Check if point is within GeoJSON boundaries using proper point-in-polygon detection
                 if (landGeoJSONLayer) {
                     const point = L.latLng(lat, lng);
                     let isInside = false;
                     
                     landGeoJSONLayer.eachLayer(function(layer) {
-                        if (layer.getBounds && layer.getBounds().contains(point)) {
+                        // Use Leaflet's built-in point-in-polygon detection
+                        if (layer.feature && layer.feature.geometry) {
+                            const geometry = layer.feature.geometry;
+                            
+                            // Handle different geometry types
+                            if (geometry.type === 'Polygon') {
+                                isInside = isPointInPolygon([lng, lat], geometry.coordinates[0]);
+                            } else if (geometry.type === 'MultiPolygon') {
+                                for (let polygon of geometry.coordinates) {
+                                    if (isPointInPolygon([lng, lat], polygon[0])) {
+                                        isInside = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Fallback to bounding box check if geometry is not available
+                        if (!isInside && layer.getBounds && layer.getBounds().contains(point)) {
                             isInside = true;
                         }
                     });
@@ -681,6 +723,23 @@
                     return isInside;
                 }
                 return null;
+            }
+
+            // Point-in-polygon algorithm (ray casting)
+            function isPointInPolygon(point, polygon) {
+                const x = point[0], y = point[1];
+                let inside = false;
+                
+                for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                    const xi = polygon[i][0], yi = polygon[i][1];
+                    const xj = polygon[j][0], yj = polygon[j][1];
+                    
+                    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+                        inside = !inside;
+                    }
+                }
+                
+                return inside;
             }
 
             function updateLocationStatus(lat, lng) {
@@ -698,6 +757,67 @@
                 } else {
                     statusElement.className = 'location-status unknown';
                     statusElement.textContent = 'Location Status Unknown';
+                }
+            }
+
+            // Check if updated sensor is a location sensor and update map
+            function checkAndUpdateLocationFromSensors(updatedSensor) {
+                console.log('🔍 Checking if sensor update affects location:', updatedSensor.sensor_type);
+                
+                // Check if this is a latitude or longitude sensor
+                const isLatSensor = updatedSensor.sensor_type.toLowerCase().includes('latitude') || updatedSensor.sensor_type.toLowerCase().includes('lat');
+                const isLngSensor = updatedSensor.sensor_type.toLowerCase().includes('longitude') || updatedSensor.sensor_type.toLowerCase().includes('lng') || updatedSensor.sensor_type.toLowerCase().includes('lon');
+                
+                if (isLatSensor || isLngSensor) {
+                    console.log('📍 Location sensor updated, checking for complete coordinates...');
+                    
+                    // Get current latitude and longitude from all sensor rows
+                    let currentLat = null;
+                    let currentLng = null;
+                    
+                    // Check all sensor rows for latitude and longitude
+                    const sensorRows = document.querySelectorAll('tr[data-sensor-type]');
+                    sensorRows.forEach(row => {
+                        const sensorType = row.getAttribute('data-sensor-type').toLowerCase();
+                        const valueCell = row.querySelector('.sensor-value');
+                        
+                        if (valueCell) {
+                            const valueText = valueCell.textContent.trim();
+                            // Extract numeric value (remove unit if present)
+                            const numericValue = parseFloat(valueText.split(' ')[0]);
+                            
+                            if (!isNaN(numericValue)) {
+                                if (sensorType.includes('latitude') || sensorType.includes('lat')) {
+                                    currentLat = numericValue;
+                                    console.log('📍 Found latitude sensor:', sensorType, '=', currentLat);
+                                } else if (sensorType.includes('longitude') || sensorType.includes('lng') || sensorType.includes('lon')) {
+                                    currentLng = numericValue;
+                                    console.log('📍 Found longitude sensor:', sensorType, '=', currentLng);
+                                }
+                            }
+                        }
+                    });
+                    
+                    // If we have both coordinates, update the map
+                    if (currentLat !== null && currentLng !== null) {
+                        console.log('✅ Complete coordinates found, updating map:', { lat: currentLat, lng: currentLng });
+                        
+                        // Update device marker
+                        addDeviceMarker(currentLat, currentLng, 'Location from sensors');
+                        
+                        // Update location status
+                        updateLocationStatus(currentLat, currentLng);
+                        
+                        // Optionally center map on new location (with smooth animation)
+                        if (map) {
+                            map.setView([currentLat, currentLng], map.getZoom(), { animate: true, duration: 1 });
+                            console.log('🗺️ Map updated with new sensor location');
+                        }
+                    } else {
+                        console.log('⚠️ Incomplete coordinates - lat:', currentLat, 'lng:', currentLng);
+                    }
+                } else {
+                    console.log('📊 Non-location sensor updated:', updatedSensor.sensor_type);
                 }
             }
 

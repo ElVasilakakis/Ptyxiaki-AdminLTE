@@ -22,16 +22,9 @@
         <div class="navbar-collapse order-2 order-lg-1 collapse" id="navbar-mobile" style="">
             <ul class="navbar-nav mt-2 mt-lg-0">
                 <li class="nav-item">
-                    <a href="#" class="navbar-nav-link rounded">Link</a>
-                </li>
-                <li class="nav-item dropdown">
-                    <a href="#" class="navbar-nav-link rounded dropdown-toggle" data-bs-toggle="dropdown">Dropdown</a>
-                    <div class="dropdown-menu">
-                        <a href="#" class="dropdown-item">Action</a>
-                        <a href="#" class="dropdown-item">Another action</a>
-                        <a href="#" class="dropdown-item">Something else here</a>
-                        <a href="#" class="dropdown-item">One more line</a>
-                    </div>
+                    <a href="{{ route('app.documentation') }}" class="navbar-nav-link rounded">
+                        <i class="ph-book-open me-2"></i>How to Register Devices
+                    </a>
                 </li>
             </ul>
         </div>
