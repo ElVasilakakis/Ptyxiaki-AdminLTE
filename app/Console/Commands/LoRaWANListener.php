@@ -17,14 +17,14 @@ class LoRaWANListener extends Command
      *
      * @var string
      */
-    protected $signature = 'lorawan:listen {--device=test-lorawan-1 : Device ID to listen for}';
+    protected $signature = 'lorawan:listen {--device= : Optional specific device ID to listen for (if not provided, listens to all LoRaWAN devices)}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Passively listen for real LoRaWAN MQTT messages from device and update sensor data';
+    protected $description = 'Passively listen for real LoRaWAN MQTT messages from all registered devices and update sensor data';
 
     // TTN Connection Parameters
     private const TTN_HOST = 'eu1.cloud.thethings.industries';
@@ -40,19 +40,29 @@ class LoRaWANListener extends Command
      */
     public function handle()
     {
-        $deviceId = $this->option('device');
+        $specificDeviceId = $this->option('device');
         
-        $this->info("🚀 Starting LoRaWAN MQTT Listener for device: {$deviceId}");
+        if ($specificDeviceId) {
+            $this->info("🚀 Starting LoRaWAN MQTT Listener for specific device: {$specificDeviceId}");
+        } else {
+            $this->info("🚀 Starting LoRaWAN MQTT Listener for ALL registered LoRaWAN devices");
+        }
+        
         $this->info("📡 Connecting to The Things Stack...");
 
         try {
             // Setup MQTT connection
             $this->setupMqttConnection();
             
-            // Subscribe to device topics
-            $this->subscribeToDeviceTopics($deviceId);
+            // Discover and subscribe to device topics
+            $devicesCount = $this->discoverAndSubscribeToDevices($specificDeviceId);
             
-            $this->info("✅ Connected and subscribed successfully!");
+            if ($devicesCount === 0) {
+                $this->warn("⚠️ No LoRaWAN devices found to listen to");
+                return 1;
+            }
+            
+            $this->info("✅ Connected and subscribed to {$devicesCount} device(s) successfully!");
             $this->info("🔄 Listening for messages... (Press Ctrl+C to stop)");
             
             // Main listening loop
@@ -93,33 +103,97 @@ class LoRaWANListener extends Command
     }
 
     /**
+     * Discover LoRaWAN devices and subscribe to their topics
+     */
+    private function discoverAndSubscribeToDevices($specificDeviceId = null)
+    {
+        // Query for LoRaWAN devices
+        $query = Device::with('mqttBroker')
+            ->whereHas('mqttBroker', function($q) {
+                $q->where('type', 'lorawan')
+                  ->orWhere('host', 'like', '%thethings.industries%');
+            })
+            ->where('is_active', true);
+        
+        // If specific device requested, filter by it
+        if ($specificDeviceId) {
+            $query->where('device_id', $specificDeviceId);
+        }
+        
+        $devices = $query->get();
+        
+        if ($devices->isEmpty()) {
+            if ($specificDeviceId) {
+                $this->warn("⚠️ Specific device '{$specificDeviceId}' not found or not a LoRaWAN device");
+            } else {
+                $this->warn("⚠️ No active LoRaWAN devices found in database");
+            }
+            return 0;
+        }
+        
+        $subscribedCount = 0;
+        
+        foreach ($devices as $device) {
+            try {
+                $this->subscribeToDeviceTopics($device);
+                $subscribedCount++;
+            } catch (\Exception $e) {
+                $this->warn("⚠️ Failed to subscribe to device '{$device->device_id}': " . $e->getMessage());
+                Log::warning('LoRaWAN Device Subscription Failed', [
+                    'device_id' => $device->device_id,
+                    'error' => $e->getMessage()
+                ]);
+                // Continue with other devices
+                continue;
+            }
+        }
+        
+        return $subscribedCount;
+    }
+
+    /**
      * Subscribe to device topics
      */
-    private function subscribeToDeviceTopics($deviceId)
+    private function subscribeToDeviceTopics(Device $device)
     {
+        $deviceId = $device->device_id;
         $baseTopic = "v3/" . self::TTN_USERNAME . "/devices/{$deviceId}";
         $uplinkTopic = "{$baseTopic}/up";
         
-        $this->info("📋 Subscribing to topic: {$uplinkTopic}");
+        $this->info("📋 Subscribing to device '{$deviceId}' topic: {$uplinkTopic}");
         
-        $this->mqttClient->subscribe($uplinkTopic, function($topic, $message) use ($deviceId) {
-            $this->handleMessage($topic, $message, $deviceId);
+        $this->mqttClient->subscribe($uplinkTopic, function($topic, $message) {
+            $this->handleMessage($topic, $message);
         }, 0);
+        
+        Log::info('LoRaWAN Device Subscribed', [
+            'device_id' => $deviceId,
+            'topic' => $uplinkTopic
+        ]);
     }
 
     /**
      * Handle incoming MQTT message
      */
-    private function handleMessage($topic, $message, $deviceId)
+    private function handleMessage($topic, $message)
     {
         try {
             $this->info("📨 Message received on topic: {$topic}");
+            
+            // Extract device ID from topic
+            // Topic format: v3/laravel-backend@ptyxiakinetwork/devices/{device_id}/up
+            $deviceId = $this->extractDeviceIdFromTopic($topic);
+            
+            if (!$deviceId) {
+                $this->warn("⚠️ Could not extract device ID from topic: {$topic}");
+                return;
+            }
             
             // Parse JSON message
             $payload = json_decode($message, true);
             
             if (!$payload) {
-                $this->warn("⚠️ Failed to parse JSON message");
+                $this->warn("⚠️ Failed to parse JSON message for device '{$deviceId}'");
                 return;
             }
             
@@ -132,7 +206,7 @@ class LoRaWANListener extends Command
             
             // Check if this is an uplink message with decoded payload
             if (!isset($payload['uplink_message']['decoded_payload'])) {
-                $this->warn("⚠️ No decoded payload found in message");
+                $this->warn("⚠️ No decoded payload found in message for device '{$deviceId}'");
                 return;
             }
             
@@ -141,13 +215,13 @@ class LoRaWANListener extends Command
                 Carbon::parse($payload['received_at']) : 
                 Carbon::now();
             
-            $this->info("🔍 Decoded payload: " . json_encode($decodedPayload));
+            $this->info("🔍 Decoded payload for '{$deviceId}': " . json_encode($decodedPayload));
             
             // Find the device in database
             $device = Device::where('device_id', $deviceId)->first();
             
             if (!$device) {
-                $this->error("❌ Device '{$deviceId}' not found in database");
+                $this->warn("⚠️ Device '{$deviceId}' not found in database - skipping");
                 return;
             }
             
@@ -168,6 +242,21 @@ class LoRaWANListener extends Command
                 'message' => $message
             ]);
         }
+    }
+
+    /**
+     * Extract device ID from MQTT topic
+     */
+    private function extractDeviceIdFromTopic($topic)
+    {
+        // Topic format: v3/laravel-backend@ptyxiakinetwork/devices/{device_id}/up
+        $pattern = '/v3\/[^\/]+\/devices\/([^\/]+)\/up/';
+        
+        if (preg_match($pattern, $topic, $matches)) {
+            return $matches[1];
+        }
+        
+        return null;
     }
 
     /**
