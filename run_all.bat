@@ -3,7 +3,7 @@ echo Starting Laravel IoT System...
 echo.
 
 echo Starting PHP Development Server...
-start "PHP Server" cmd /k "php -S localhost:8000 -t public"
+start "PHP Server" cmd /k "php -S 127.0.0.1:8000 -t public"
 
 echo Waiting 3 seconds for server to start...
 timeout /t 3 /nobreak >nul
@@ -20,7 +20,7 @@ echo All services started successfully!
 echo ========================================
 echo.
 echo Services running:
-echo - PHP Server: http://localhost:8000
+echo - PHP Server: http://127.0.0.1:8000
 echo - LoRaWAN Listener: Listening for LoRaWAN devices
 echo - Device Listener: Listening for all device types
 echo.

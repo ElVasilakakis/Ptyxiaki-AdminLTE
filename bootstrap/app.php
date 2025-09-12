@@ -16,4 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })->create();
+    })
+    ->withCommands([
+        base_path('app/Console/Commands'),  // Auto-loads all commands in this directory (no trailing comma needed if it's the only item)
+    ])
+    ->create();
