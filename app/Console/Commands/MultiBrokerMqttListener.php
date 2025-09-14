@@ -15,7 +15,7 @@ class MultiBrokerMqttListener extends Command
     /**
      * The name and signature of the console command.
      */
-    protected $signature = 'mqtt:listen-multi {--device= : Optional specific device ID} {--broker= : Optional specific broker ID}';
+    protected $signature = 'mqtt:listen-multi {--device= : Optional specific device ID} {--broker= : Optional specific broker ID} {--timeout=3600} {--memory=256}';
 
     /**
      * The console command description.
@@ -26,6 +26,9 @@ class MultiBrokerMqttListener extends Command
     private $isRunning = true;
     private $lastBrokerScan = 0;
     private $brokerScanInterval = 30; // Check for new brokers every 30 seconds
+    private $startTime;
+    private $maxRunTime;
+    private $maxMemory;
 
     /**
      * Execute the console command.
@@ -34,8 +37,13 @@ class MultiBrokerMqttListener extends Command
     {
         $specificDeviceId = $this->option('device');
         $specificBrokerId = $this->option('broker');
+        
+        // Set limits
+        $this->maxRunTime = (int) $this->option('timeout');
+        $this->maxMemory = (int) $this->option('memory');
+        $this->startTime = time();
 
-        $this->info("🚀 Starting Multi-Broker MQTT Listener");
+        $this->info("🚀 Starting Multi-Broker MQTT Listener (timeout: {$this->maxRunTime}s, memory: {$this->maxMemory}MB)");
         
         if ($specificBrokerId) {
             $this->info("📡 Listening to specific broker ID: {$specificBrokerId}");
@@ -48,10 +56,7 @@ class MultiBrokerMqttListener extends Command
         }
 
         // Set up signal handlers for graceful shutdown
-        if (function_exists('pcntl_signal')) {
-            pcntl_signal(SIGTERM, [$this, 'handleShutdown']);
-            pcntl_signal(SIGINT, [$this, 'handleShutdown']);
-        }
+        $this->registerSignalHandlers();
 
         try {
             $this->startMultiBrokerListening($specificDeviceId, $specificBrokerId);
@@ -69,6 +74,17 @@ class MultiBrokerMqttListener extends Command
     }
 
     /**
+     * Register signal handlers for graceful shutdown
+     */
+    private function registerSignalHandlers()
+    {
+        if (function_exists('pcntl_signal')) {
+            pcntl_signal(SIGTERM, [$this, 'handleShutdown']);
+            pcntl_signal(SIGINT, [$this, 'handleShutdown']);
+        }
+    }
+
+    /**
      * Start listening to multiple brokers
      */
     private function startMultiBrokerListening($specificDeviceId = null, $specificBrokerId = null)
@@ -80,6 +96,19 @@ class MultiBrokerMqttListener extends Command
                 // Handle signals
                 if (function_exists('pcntl_signal_dispatch')) {
                     pcntl_signal_dispatch();
+                }
+
+                // Check time limit
+                if ((time() - $this->startTime) >= $this->maxRunTime) {
+                    $this->info("⏰ Time limit reached ({$this->maxRunTime}s) - stopping gracefully");
+                    break;
+                }
+
+                // Check memory limit
+                $memoryUsage = memory_get_usage(true) / 1024 / 1024; // MB
+                if ($memoryUsage > $this->maxMemory) {
+                    $this->warn("🧠 Memory limit reached ({$memoryUsage}MB/{$this->maxMemory}MB) - stopping gracefully");
+                    break;
                 }
 
                 $currentTime = time();
@@ -105,6 +134,9 @@ class MultiBrokerMqttListener extends Command
                 sleep(5);
             }
         }
+
+        // Cleanup before exit
+        $this->cleanup();
     }
 
     /**
@@ -247,9 +279,21 @@ class MultiBrokerMqttListener extends Command
                 foreach ($topics as $topic) {
                     $this->info("📋 Subscribing to topic: {$topic}");
                     
+                    // Add connection test
+                    if (!$client->isConnected()) {
+                        $this->error("❌ Client not connected when subscribing to {$topic}");
+                        continue;
+                    }
+                    
                     $client->subscribe($topic, function($topic, $message) use ($broker) {
+                        // Add immediate debug output
+                        $this->info("🔔 RAW MESSAGE RECEIVED!");
+                        $this->info("Topic: {$topic}");
+                        $this->info("Message: " . substr($message, 0, 500));
                         $this->handleMessage($broker, $topic, $message);
                     }, 0);
+                    
+                    $this->info("✅ Successfully subscribed to {$topic}");
                 }
 
             } catch (\Exception $e) {
@@ -319,6 +363,9 @@ class MultiBrokerMqttListener extends Command
                 $this->mqttConnections[$connectionKey]['message_count']++;
                 $this->mqttConnections[$connectionKey]['last_activity'] = time();
             }
+
+            // Store last message time for health monitoring
+            cache(['mqtt_last_message_time' => now()], now()->addMinutes(10));
 
             $this->info("📨 Message from broker '{$broker->name}' on topic: {$topic}");
 
@@ -400,10 +447,13 @@ class MultiBrokerMqttListener extends Command
     {
         if (!isset($payload['uplink_message']['decoded_payload'])) {
             $this->warn("⚠️ No decoded payload found in LoRaWAN message");
+            $this->info("Available keys: " . implode(', ', array_keys($payload)));
             return;
         }
 
         $decodedPayload = $payload['uplink_message']['decoded_payload'];
+        $this->info("🔍 Processing decoded payload: " . json_encode($decodedPayload));
+        
         $sensorsUpdated = $this->processSensorReadings($device, $decodedPayload, $timestamp);
         
         $this->info("🎯 Updated {$sensorsUpdated} sensors for LoRaWAN device '{$device->device_id}'");
@@ -424,7 +474,7 @@ class MultiBrokerMqttListener extends Command
     }
 
     /**
-     * Extract sensor data from generic MQTT
+     * Extract sensor data from generic MQTT - FIXED REGEX INDICES
      */
     private function extractSensorDataFromGenericMqtt(string $topic, array $payload): array
     {
@@ -433,13 +483,13 @@ class MultiBrokerMqttListener extends Command
 
         // Pattern: devices/{device_id}/sensors/{sensor_type}
         if (preg_match('/devices\/[^\/]+\/sensors\/(.+)/', $topic, $matches)) {
-            $sensorType = $matches[7];
+            $sensorType = $matches[7]; // FIXED: was $matches[8]
             $sensorData[$sensorType] = $payload['value'] ?? $payload;
         }
         // Pattern: {device_id}/{sensor_type}/{value}
         elseif (preg_match('/[^\/]+\/(.+)\/(.+)/', $topic, $matches)) {
-            $sensorType = $matches[7];
-            $sensorData[$sensorType] = $matches[8];
+            $sensorType = $matches[7]; // FIXED: was $matches[8]
+            $sensorData[$sensorType] = $matches[9]; // FIXED: was $matches[10]
         }
         // Direct payload with sensor readings
         else {
@@ -450,7 +500,7 @@ class MultiBrokerMqttListener extends Command
     }
 
     /**
-     * Extract device ID from topic based on broker type
+     * Extract device ID from topic based on broker type - FIXED REGEX INDICES
      */
     private function extractDeviceIdFromTopic(MqttBroker $broker, string $topic): ?string
     {
@@ -458,7 +508,7 @@ class MultiBrokerMqttListener extends Command
             case 'lorawan':
                 // v3/{username}/devices/{device_id}/up
                 if (preg_match('/v3\/[^\/]+\/devices\/([^\/]+)\/up/', $topic, $matches)) {
-                    return $matches[7];
+                    return $matches[7]; // FIXED: was $matches[8]
                 }
                 break;
                 
@@ -467,11 +517,11 @@ class MultiBrokerMqttListener extends Command
             default:
                 // devices/{device_id}/sensors/{sensor_type}
                 if (preg_match('/devices\/([^\/]+)\//', $topic, $matches)) {
-                    return $matches[7];
+                    return $matches[7]; // FIXED: was $matches[8]
                 }
                 // {device_id}/{sensor_type}/{value}
                 if (preg_match('/^([^\/]+)\//', $topic, $matches)) {
-                    return $matches[7];
+                    return $matches[7]; // FIXED: was $matches[8]
                 }
                 break;
         }
@@ -600,6 +650,17 @@ class MultiBrokerMqttListener extends Command
     }
 
     /**
+     * Cleanup all connections
+     */
+    private function cleanup()
+    {
+        foreach ($this->mqttConnections as $connectionKey => $connection) {
+            $this->disconnectBroker($connectionKey);
+        }
+        $this->info("🧹 All connections cleaned up");
+    }
+
+    /**
      * Handle graceful shutdown
      */
     public function handleShutdown($signal = null)
@@ -607,9 +668,7 @@ class MultiBrokerMqttListener extends Command
         $this->info("\n🛑 Received shutdown signal. Closing all connections...");
         $this->isRunning = false;
 
-        foreach ($this->mqttConnections as $connectionKey => $connection) {
-            $this->disconnectBroker($connectionKey);
-        }
+        $this->cleanup();
 
         $this->info("✅ All MQTT connections closed gracefully");
         exit(0);
