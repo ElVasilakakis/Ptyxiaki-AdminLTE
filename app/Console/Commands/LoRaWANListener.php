@@ -12,9 +12,15 @@ use Carbon\Carbon;
 
 class MultiBrokerMqttListener extends Command
 {
-    protected $signature = 'lorawan:listen {--device= : Optional specific device ID} {--broker= : Optional specific broker ID}';
-    
-    protected $description = 'Listen to LoRaWAN and other MQTT brokers from database';
+    /**
+     * The name and signature of the console command.
+     */
+    protected $signature = 'mqtt:listen-multi {--device= : Optional specific device ID} {--broker= : Optional specific broker ID}';
+
+    /**
+     * The console command description.
+     */
+    protected $description = 'Listen to multiple active MQTT brokers from database and update sensor data';
 
     private $mqttConnections = [];
     private $isRunning = true;
@@ -41,6 +47,12 @@ class MultiBrokerMqttListener extends Command
             $this->info("🎯 Filtering for specific device: {$specificDeviceId}");
         }
 
+        // Set up signal handlers for graceful shutdown
+        if (function_exists('pcntl_signal')) {
+            pcntl_signal(SIGTERM, [$this, 'handleShutdown']);
+            pcntl_signal(SIGINT, [$this, 'handleShutdown']);
+        }
+
         try {
             $this->startMultiBrokerListening($specificDeviceId, $specificBrokerId);
         } catch (\Exception $e) {
@@ -65,6 +77,11 @@ class MultiBrokerMqttListener extends Command
 
         while ($this->isRunning) {
             try {
+                // Handle signals
+                if (function_exists('pcntl_signal_dispatch')) {
+                    pcntl_signal_dispatch();
+                }
+
                 $currentTime = time();
 
                 // Periodically scan for new or updated brokers
@@ -103,12 +120,18 @@ class MultiBrokerMqttListener extends Command
 
         $activeBrokers = $query->get();
 
+        if ($activeBrokers->isEmpty()) {
+            $this->warn("⚠️ No active MQTT brokers found");
+            return;
+        }
+
         foreach ($activeBrokers as $broker) {
             $connectionKey = "broker_{$broker->id}";
 
-            // Skip if already connected
+            // Skip if already connected and healthy
             if (isset($this->mqttConnections[$connectionKey]) && 
-                $this->mqttConnections[$connectionKey]['client']) {
+                $this->mqttConnections[$connectionKey]['client'] &&
+                $this->isConnectionHealthy($connectionKey)) {
                 continue;
             }
 
@@ -126,6 +149,22 @@ class MultiBrokerMqttListener extends Command
 
         // Remove connections for inactive brokers
         $this->removeInactiveBrokerConnections($activeBrokers);
+    }
+
+    /**
+     * Check if connection is healthy
+     */
+    private function isConnectionHealthy($connectionKey): bool
+    {
+        if (!isset($this->mqttConnections[$connectionKey])) {
+            return false;
+        }
+
+        $connection = $this->mqttConnections[$connectionKey];
+        $lastActivity = $connection['last_activity'] ?? 0;
+        
+        // Consider connection stale if no activity for 5 minutes
+        return (time() - $lastActivity) < 300;
     }
 
     /**
@@ -147,7 +186,8 @@ class MultiBrokerMqttListener extends Command
             'broker' => $broker,
             'client' => $client,
             'connected_at' => time(),
-            'last_activity' => time()
+            'last_activity' => time(),
+            'message_count' => 0
         ];
 
         // Subscribe to device topics for this broker
@@ -195,6 +235,11 @@ class MultiBrokerMqttListener extends Command
     {
         $devices = $broker->devices()->where('is_active', true)->get();
 
+        if ($devices->isEmpty()) {
+            $this->warn("⚠️ No active devices found for broker: {$broker->name}");
+            return;
+        }
+
         foreach ($devices as $device) {
             try {
                 $topics = $this->getDeviceTopics($broker, $device);
@@ -211,6 +256,8 @@ class MultiBrokerMqttListener extends Command
                 $this->warn("⚠️ Failed to subscribe to device '{$device->device_id}': " . $e->getMessage());
             }
         }
+
+        $this->info("📡 Subscribed to {$devices->count()} device(s) for broker: {$broker->name}");
     }
 
     /**
@@ -233,7 +280,8 @@ class MultiBrokerMqttListener extends Command
                 return [
                     "devices/{$deviceId}/sensors/+",
                     "devices/{$deviceId}/status",
-                    "{$deviceId}/+/+"
+                    "{$deviceId}/+/+",
+                    "{$deviceId}/data"
                 ];
         }
     }
@@ -264,6 +312,14 @@ class MultiBrokerMqttListener extends Command
     private function handleMessage(MqttBroker $broker, $topic, $message)
     {
         try {
+            $connectionKey = "broker_{$broker->id}";
+            
+            // Update connection stats
+            if (isset($this->mqttConnections[$connectionKey])) {
+                $this->mqttConnections[$connectionKey]['message_count']++;
+                $this->mqttConnections[$connectionKey]['last_activity'] = time();
+            }
+
             $this->info("📨 Message from broker '{$broker->name}' on topic: {$topic}");
 
             $deviceId = $this->extractDeviceIdFromTopic($broker, $topic);
@@ -277,6 +333,7 @@ class MultiBrokerMqttListener extends Command
             
             if (!$payload) {
                 $this->warn("⚠️ Failed to parse JSON message for device '{$deviceId}'");
+                $this->info("Raw message: " . substr($message, 0, 200));
                 return;
             }
 
@@ -285,7 +342,7 @@ class MultiBrokerMqttListener extends Command
                 'broker_name' => $broker->name,
                 'topic' => $topic,
                 'device_id' => $deviceId,
-                'payload' => $payload
+                'payload_keys' => array_keys($payload)
             ]);
 
             // Find the device
@@ -307,7 +364,7 @@ class MultiBrokerMqttListener extends Command
                 'broker_id' => $broker->id,
                 'error' => $e->getMessage(),
                 'topic' => $topic,
-                'message' => $message
+                'message' => substr($message, 0, 500)
             ]);
         }
     }
@@ -376,13 +433,13 @@ class MultiBrokerMqttListener extends Command
 
         // Pattern: devices/{device_id}/sensors/{sensor_type}
         if (preg_match('/devices\/[^\/]+\/sensors\/(.+)/', $topic, $matches)) {
-            $sensorType = $matches[29];
+            $sensorType = $matches[7];
             $sensorData[$sensorType] = $payload['value'] ?? $payload;
         }
         // Pattern: {device_id}/{sensor_type}/{value}
         elseif (preg_match('/[^\/]+\/(.+)\/(.+)/', $topic, $matches)) {
-            $sensorType = $matches[29];
-            $sensorData[$sensorType] = $matches[30];
+            $sensorType = $matches[7];
+            $sensorData[$sensorType] = $matches[8];
         }
         // Direct payload with sensor readings
         else {
@@ -401,7 +458,7 @@ class MultiBrokerMqttListener extends Command
             case 'lorawan':
                 // v3/{username}/devices/{device_id}/up
                 if (preg_match('/v3\/[^\/]+\/devices\/([^\/]+)\/up/', $topic, $matches)) {
-                    return $matches[29];
+                    return $matches[7];
                 }
                 break;
                 
@@ -410,11 +467,11 @@ class MultiBrokerMqttListener extends Command
             default:
                 // devices/{device_id}/sensors/{sensor_type}
                 if (preg_match('/devices\/([^\/]+)\//', $topic, $matches)) {
-                    return $matches[29];
+                    return $matches[7];
                 }
                 // {device_id}/{sensor_type}/{value}
                 if (preg_match('/^([^\/]+)\//', $topic, $matches)) {
-                    return $matches[29];
+                    return $matches[7];
                 }
                 break;
         }
@@ -445,6 +502,10 @@ class MultiBrokerMqttListener extends Command
         $sensorsUpdated = 0;
 
         foreach ($sensorData as $sensorKey => $value) {
+            if ($value === null || $value === '') {
+                continue; // Skip empty values
+            }
+
             $mapping = $sensorMappings[$sensorKey] ?? [
                 'type' => $sensorKey, 
                 'unit' => ''
@@ -499,8 +560,7 @@ class MultiBrokerMqttListener extends Command
     private function cleanupBrokenConnections()
     {
         foreach ($this->mqttConnections as $connectionKey => $connection) {
-            if (!$connection['client'] || 
-                (time() - $connection['last_activity']) > 300) { // 5 minutes timeout
+            if (!$connection['client'] || !$this->isConnectionHealthy($connectionKey)) {
                 $this->disconnectBroker($connectionKey);
             }
         }
@@ -542,7 +602,7 @@ class MultiBrokerMqttListener extends Command
     /**
      * Handle graceful shutdown
      */
-    public function handleShutdown($signal)
+    public function handleShutdown($signal = null)
     {
         $this->info("\n🛑 Received shutdown signal. Closing all connections...");
         $this->isRunning = false;
