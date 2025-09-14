@@ -12,15 +12,9 @@ use Carbon\Carbon;
 
 class MultiBrokerMqttListener extends Command
 {
-    /**
-     * The name and signature of the console command.
-     */
-    protected $signature = 'mqtt:listen-multi {--device= : Optional specific device ID to listen for} {--broker= : Optional specific broker ID to listen to}';
-
-    /**
-     * The console command description.
-     */
-    protected $description = 'Listen to multiple active MQTT brokers from database and update sensor data';
+    protected $signature = 'lorawan:listen {--device= : Optional specific device ID} {--broker= : Optional specific broker ID}';
+    
+    protected $description = 'Listen to LoRaWAN and other MQTT brokers from database';
 
     private $mqttConnections = [];
     private $isRunning = true;
