@@ -8,11 +8,8 @@ start "PHP Server" cmd /k "php -S 127.0.0.1:8000 -t public"
 echo Waiting 3 seconds for server to start...
 timeout /t 3 /nobreak >nul
 
-echo Starting LoRaWAN Listener...
-start "LoRaWAN Listener" cmd /k "php artisan lorawan:listen"
-
-echo Starting Universal Device Listener...
-start "Device Listener" cmd /k "php artisan devices:listen"
+echo Starting MQTT Listener...
+start "MQTT Listener" cmd /k "php artisan mqtt:listen"
 
 echo.
 echo ========================================
@@ -21,8 +18,12 @@ echo ========================================
 echo.
 echo Services running:
 echo - PHP Server: http://127.0.0.1:8000
-echo - LoRaWAN Listener: Listening for LoRaWAN devices
-echo - Device Listener: Listening for all device types
+echo - MQTT Listener: Listening for MQTT devices
+echo.
+echo LoRaWAN Configuration:
+echo - LoRaWAN devices use HTTP webhooks (not MQTT)
+echo - Webhook endpoint: http://127.0.0.1:8000/api/lorawan/webhook
+echo - Configure this URL in The Things Stack console
 echo.
 echo Press any key to close this window...
 echo (Services will continue running in separate windows)
