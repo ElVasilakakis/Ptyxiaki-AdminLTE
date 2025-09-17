@@ -13,85 +13,28 @@ use Carbon\Carbon;
 
 class LoRaWANController extends Controller
 {
-    // Note: Connection parameters are now dynamically loaded from device and broker models
-    // The LoRaWAN uplink listener command handles all connections automatically
-
-    // Debug methods removed - LoRaWAN connections are now handled by the LoRaWANUplinkListener command
-    // which dynamically loads connection parameters from device and broker models
-
     /**
-     * Webhook endpoint to receive LoRaWAN uplink data from The Things Stack
+     * Unified webhook endpoint to receive both MQTT and LoRaWAN data
      */
     public function webhook(Request $request)
     {
         try {
-            Log::info('LoRaWAN Webhook Received', ['payload' => $request->all()]);
+            Log::info('Webhook Received', ['payload' => $request->all()]);
             
-            // Get the payload data
             $payload = $request->all();
             
-            // Validate that this is an uplink message
-            if (!isset($payload['data']['@type']) || 
-                $payload['data']['@type'] !== 'type.googleapis.com/ttn.lorawan.v3.ApplicationUp') {
-                Log::warning('LoRaWAN Webhook: Not an uplink message', ['type' => $payload['data']['@type'] ?? 'unknown']);
-                return response()->json(['status' => 'ignored', 'reason' => 'not_uplink'], 200);
+            // Detect payload format and process accordingly
+            if ($this->isMqttPayload($payload)) {
+                return $this->processMqttPayload($payload);
+            } elseif ($this->isLoRaWANPayload($payload)) {
+                return $this->processLoRaWANPayload($payload);
+            } else {
+                Log::warning('Unknown payload format', ['payload_keys' => array_keys($payload)]);
+                return response()->json(['status' => 'ignored', 'reason' => 'unknown_format'], 200);
             }
-            
-            // Check if uplink_message exists
-            if (!isset($payload['data']['uplink_message'])) {
-                Log::warning('LoRaWAN Webhook: No uplink_message found');
-                return response()->json(['status' => 'ignored', 'reason' => 'no_uplink_message'], 200);
-            }
-            
-            $uplinkMessage = $payload['data']['uplink_message'];
-            $endDeviceIds = $payload['data']['end_device_ids'];
-            
-            // Extract device information
-            $deviceId = $endDeviceIds['device_id'];
-            $applicationId = $endDeviceIds['application_ids']['application_id'];
-            $devEui = $endDeviceIds['dev_eui'];
-            
-            Log::info('Processing LoRaWAN uplink', [
-                'device_id' => $deviceId,
-                'application_id' => $applicationId,
-                'dev_eui' => $devEui
-            ]);
-            
-            // Find the device in our database
-            $device = Device::where('device_id', $deviceId)->first();
-            
-            if (!$device) {
-                Log::warning('LoRaWAN Webhook: Device not found in database', ['device_id' => $deviceId]);
-                return response()->json(['status' => 'error', 'reason' => 'device_not_found'], 404);
-            }
-            
-            // Update device status and last seen
-            $device->setOnline();
-            
-            // Check if decoded payload exists
-            if (!isset($uplinkMessage['decoded_payload'])) {
-                Log::warning('LoRaWAN Webhook: No decoded payload found');
-                return response()->json(['status' => 'ignored', 'reason' => 'no_decoded_payload'], 200);
-            }
-            
-            $decodedPayload = $uplinkMessage['decoded_payload'];
-            $receivedAt = Carbon::parse($payload['data']['received_at']);
-            
-            Log::info('LoRaWAN decoded payload', ['payload' => $decodedPayload]);
-            
-            // Process each sensor reading from the decoded payload
-            $sensorsUpdated = $this->processSensorReadings($device, $decodedPayload, $receivedAt);
-            
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Sensor data processed successfully',
-                'device_id' => $deviceId,
-                'sensors_updated' => $sensorsUpdated,
-                'payload_items' => count($decodedPayload)
-            ], 200);
             
         } catch (\Exception $e) {
-            Log::error('LoRaWAN Webhook Error', [
+            Log::error('Webhook Error', [
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -107,9 +50,168 @@ class LoRaWANController extends Controller
     }
     
     /**
-     * Process sensor readings from LoRaWAN decoded payload
+     * Check if payload is MQTT format
      */
-    private function processSensorReadings(Device $device, array $decodedPayload, Carbon $timestamp)
+    private function isMqttPayload($payload)
+    {
+        return isset($payload['sensors']) && is_array($payload['sensors']) && isset($payload['timestamp']);
+    }
+    
+    /**
+     * Check if payload is LoRaWAN format
+     */
+    private function isLoRaWANPayload($payload)
+    {
+        return isset($payload['uplink_message']) || 
+               (isset($payload['data']) && isset($payload['data']['uplink_message']));
+    }
+    
+    /**
+     * Process MQTT payload format
+     */
+    private function processMqttPayload($payload)
+    {
+        Log::info('Processing MQTT payload', ['sensor_count' => count($payload['sensors'])]);
+        
+        // For MQTT, we need to determine the device somehow
+        $deviceId = $payload['device_id'] ?? 'mqtt-device-1';
+        
+        // Find or create device
+        $device = Device::where('device_id', $deviceId)->first();
+        if (!$device) {
+            // Create a default MQTT device if it doesn't exist
+            $device = Device::create([
+                'device_id' => $deviceId,
+                'device_name' => 'MQTT Device',
+                'device_type' => 'mqtt',
+                'user_id' => 1, // Adjust this to your user ID
+                'location' => 'Unknown',
+                'enabled' => true
+            ]);
+            Log::info('Created new MQTT device', ['device_id' => $deviceId]);
+        }
+        
+        // Process timestamp
+        $timestamp = isset($payload['timestamp']) 
+            ? Carbon::createFromTimestamp($payload['timestamp'])
+            : Carbon::now();
+        
+        // Process sensors array
+        $sensorsUpdated = 0;
+        foreach ($payload['sensors'] as $sensorData) {
+            $sensorType = $sensorData['type'];
+            $sensorValue = $this->extractValueFromString($sensorData['value']);
+            $unit = $this->extractUnitFromString($sensorData['value']);
+            
+            // Handle geolocation separately
+            if ($sensorType === 'geolocation') {
+                $sensorType = $sensorData['subtype']; // latitude or longitude
+            }
+            
+            // Map thermal to temperature
+            if ($sensorType === 'thermal') {
+                $sensorType = 'temperature';
+            }
+            
+            // Find or create individual sensor for each type
+            $sensor = Sensor::firstOrCreate(
+                [
+                    'device_id' => $device->id,
+                    'sensor_type' => $sensorType,
+                    'sensor_name' => ucfirst($sensorType)
+                ],
+                [
+                    'user_id' => $device->user_id,
+                    'description' => 'MQTT ' . ucfirst($sensorType) . ' sensor',
+                    'location' => $device->location,
+                    'unit' => $unit,
+                    'enabled' => true,
+                    'alert_enabled' => false
+                ]
+            );
+            
+            // Update sensor reading
+            $sensor->updateReading($sensorValue, $timestamp);
+            $sensorsUpdated++;
+            
+            Log::info('MQTT sensor updated', [
+                'device_id' => $deviceId,
+                'sensor_type' => $sensorType,
+                'value' => $sensorValue,
+                'unit' => $unit
+            ]);
+        }
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'MQTT sensor data processed successfully',
+            'device_id' => $deviceId,
+            'sensors_updated' => $sensorsUpdated,
+            'payload_items' => count($payload['sensors'])
+        ], 200);
+    }
+    
+    /**
+     * Process LoRaWAN payload format
+     */
+    private function processLoRaWANPayload($payload)
+    {
+        Log::info('Processing LoRaWAN payload');
+        
+        // Handle different LoRaWAN payload formats
+        $data = null;
+        if (isset($payload['data'])) {
+            $data = $payload['data'];
+        } elseif (isset($payload['uplink_message'])) {
+            $data = $payload;
+        } else {
+            return response()->json(['status' => 'ignored', 'reason' => 'no_uplink_data'], 200);
+        }
+        
+        // Check if uplink_message exists
+        if (!isset($data['uplink_message'])) {
+            Log::warning('LoRaWAN Webhook: No uplink_message found');
+            return response()->json(['status' => 'ignored', 'reason' => 'no_uplink_message'], 200);
+        }
+        
+        $uplinkMessage = $data['uplink_message'];
+        $endDeviceIds = $data['end_device_ids'];
+        
+        // Extract device information
+        $deviceId = $endDeviceIds['device_id'];
+        $applicationId = $endDeviceIds['application_ids']['application_id'];
+        
+        // Find device
+        $device = Device::where('device_id', $deviceId)->first();
+        if (!$device) {
+            Log::warning('LoRaWAN device not found', ['device_id' => $deviceId]);
+            return response()->json(['status' => 'ignored', 'reason' => 'device_not_found'], 404);
+        }
+        
+        // Process decoded payload
+        if (!isset($uplinkMessage['decoded_payload'])) {
+            Log::warning('LoRaWAN: No decoded payload found');
+            return response()->json(['status' => 'ignored', 'reason' => 'no_decoded_payload'], 200);
+        }
+        
+        $decodedPayload = $uplinkMessage['decoded_payload'];
+        $timestamp = Carbon::parse($data['received_at']);
+        
+        $sensorsUpdated = $this->processLoRaWANSensorReadings($device, $decodedPayload, $timestamp);
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'LoRaWAN sensor data processed successfully',
+            'device_id' => $deviceId,
+            'sensors_updated' => $sensorsUpdated,
+            'payload_items' => count($decodedPayload)
+        ], 200);
+    }
+    
+    /**
+     * Process LoRaWAN sensor readings
+     */
+    private function processLoRaWANSensorReadings(Device $device, array $decodedPayload, Carbon $timestamp)
     {
         $sensorsUpdated = 0;
         
@@ -187,9 +289,62 @@ class LoRaWANController extends Controller
         
         return $sensorsUpdated;
     }
-
+    
     /**
-     * Guess unit from value for unknown sensor types
+     * Extract numeric value from string like "56.4 celsius"
+     */
+    private function extractValueFromString($valueString)
+    {
+        if (is_numeric($valueString)) {
+            return (float)$valueString;
+        }
+        
+        // Extract number from string like "56.4 celsius" or "40.0 percent"
+        preg_match('/([0-9]*\.?[0-9]+)/', $valueString, $matches);
+        return isset($matches[1]) ? (float)$matches[1] : 0;
+    }
+    
+    /**
+     * Extract unit from string like "56.4 celsius"
+     */
+    private function extractUnitFromString($valueString)
+    {
+        if (is_numeric($valueString)) {
+            return '';
+        }
+        
+        // Common unit mappings for MQTT sensors
+        $unitMappings = [
+            'celsius' => '°C',
+            'percent' => '%',
+            'percentage' => '%',
+            'meters' => 'm',
+            'meter' => 'm',
+            'degrees' => '°',
+            'degree' => '°',
+            'fahrenheit' => '°F',
+            'kelvin' => 'K',
+            'pascal' => 'Pa',
+            'bar' => 'bar',
+            'lux' => 'lx',
+            'volt' => 'V',
+            'ampere' => 'A',
+            'amp' => 'A',
+            'watt' => 'W'
+        ];
+        
+        $valueString = strtolower($valueString);
+        foreach ($unitMappings as $text => $unit) {
+            if (strpos($valueString, $text) !== false) {
+                return $unit;
+            }
+        }
+        
+        return '';
+    }
+    
+    /**
+     * Guess unit from numeric value for unknown sensor types
      */
     private function guessUnitFromValue($value)
     {
@@ -214,103 +369,47 @@ class LoRaWANController extends Controller
         
         return ''; // Unknown unit
     }
-
+    
     /**
-     * Test webhook endpoint with sample data
+     * Test webhook endpoint with sample MQTT data
      */
-    public function testWebhook(Request $request)
+    public function testMqttWebhook(Request $request)
     {
-        // Use the exact JSON payload you provided
-        $samplePayload = [
-            "name" => "as.up.data.forward",
-            "time" => "2025-09-10T11:37:28.540084910Z",
-            "identifiers" => [
+        $sampleMqttPayload = [
+            "device_id" => "mqtt-test-device",
+            "sensors" => [
                 [
-                    "device_ids" => [
-                        "device_id" => "test-lorawan-1",
-                        "application_ids" => [
-                            "application_id" => "laravel-backend"
-                        ],
-                        "dev_eui" => "70B3D57ED80048A2",
-                        "dev_addr" => "27FCC0D0"
-                    ]
+                    "type" => "thermal",
+                    "value" => "56.4 celsius"
+                ],
+                [
+                    "type" => "humidity",
+                    "value" => "40.0 percent"
+                ],
+                [
+                    "type" => "light",
+                    "value" => "24 percent"
+                ],
+                [
+                    "type" => "potentiometer",
+                    "value" => "100 percent"
+                ],
+                [
+                    "type" => "geolocation",
+                    "subtype" => "latitude",
+                    "value" => "39.506240"
+                ],
+                [
+                    "type" => "geolocation",
+                    "subtype" => "longitude",
+                    "value" => "-107.736337"
                 ]
             ],
-            "data" => [
-                "@type" => "type.googleapis.com/ttn.lorawan.v3.ApplicationUp",
-                "end_device_ids" => [
-                    "device_id" => "test-lorawan-1",
-                    "application_ids" => [
-                        "application_id" => "laravel-backend"
-                    ],
-                    "dev_eui" => "70B3D57ED80048A2",
-                    "dev_addr" => "27FCC0D0"
-                ],
-                "correlation_ids" => [
-                    "as:up:01K4SPN6PTJT68X2T4AAPF653C",
-                    "rpc:/ttn.lorawan.v3.AppAs/SimulateUplink:3b058207-8d35-41c7-a3dc-87d26347cfbe"
-                ],
-                "received_at" => "2025-09-10T11:37:28.537951549Z",
-                "uplink_message" => [
-                    "f_port" => 1,
-                    "frm_payload" => "E4gZllUCQAJA+K/JEAZAAA==",
-                    "decoded_payload" => [
-                        "altitude" => 1600,
-                        "battery" => 85,
-                        "gps_fix" => 0,
-                        "gps_fix_type" => "No Fix",
-                        "humidity" => 65.5,
-                        "latitude" => 37.749312,
-                        "longitude" => -122.697456,
-                        "temperature" => 50
-                    ],
-                    "rx_metadata" => [
-                        [
-                            "gateway_ids" => [
-                                "gateway_id" => "test"
-                            ],
-                            "rssi" => 42,
-                            "channel_rssi" => 42,
-                            "snr" => 4.2
-                        ]
-                    ],
-                    "settings" => [
-                        "data_rate" => [
-                            "lora" => [
-                                "bandwidth" => 125000,
-                                "spreading_factor" => 7
-                            ]
-                        ],
-                        "frequency" => "868000000"
-                    ],
-                    "locations" => [
-                        "user" => [
-                            "latitude" => 45.227372291465,
-                            "longitude" => -110.836232887651,
-                            "source" => "SOURCE_REGISTRY"
-                        ]
-                    ]
-                ],
-                "simulated" => true
-            ],
-            "correlation_ids" => [
-                "as:up:01K4SPN6PTJT68X2T4AAPF653C",
-                "rpc:/ttn.lorawan.v3.AppAs/SimulateUplink:3b058207-8d35-41c7-a3dc-87d26347cfbe"
-            ],
-            "origin" => "ip-10-23-15-240.eu-west-1.compute.internal",
-            "context" => [
-                "tenant-id" => "Cg9wdHl4aWFraW5ldHdvcms="
-            ],
-            "visibility" => [
-                "rights" => [
-                    "RIGHT_APPLICATION_TRAFFIC_READ"
-                ]
-            ],
-            "unique_id" => "01K4SPN6PWVCQHH836EYKPE4TR"
+            "timestamp" => 60147
         ];
         
         // Create a new request with the sample payload
-        $testRequest = new Request($samplePayload);
+        $testRequest = new Request($sampleMqttPayload);
         
         // Call the actual webhook method
         $response = $this->webhook($testRequest);
@@ -319,10 +418,55 @@ class LoRaWANController extends Controller
             'test_status' => 'completed',
             'webhook_response' => $response->getData(),
             'sample_payload_used' => true,
-            'message' => 'Test webhook executed with your provided JSON data'
+            'message' => 'Test MQTT webhook executed successfully'
         ]);
     }
-
-    // getTopics method removed - topic generation is now handled by the LoRaWANUplinkListener command
-    // which dynamically generates topics based on device and broker data
+    
+    /**
+     * Test webhook endpoint with sample LoRaWAN data
+     */
+    public function testLoRaWANWebhook(Request $request)
+    {
+        $sampleLoRaWANPayload = [
+            "name" => "as.up.data.forward",
+            "time" => "2025-09-17T09:19:00.730681063Z",
+            "end_device_ids" => [
+                "device_id" => "test-lorawan-1",
+                "application_ids" => [
+                    "application_id" => "laravel-backend"
+                ],
+                "dev_eui" => "70B3D57ED80048A2",
+                "dev_addr" => "27FCC0D0"
+            ],
+            "uplink_message" => [
+                "f_port" => 1,
+                "frm_payload" => "E4gWLlUCRm6s+OcLSAAPAg==",
+                "decoded_payload" => [
+                    "altitude" => 15,
+                    "battery" => 85,
+                    "gps_fix" => 2,
+                    "gps_fix_type" => "3D Fix",
+                    "humidity" => 56.78,
+                    "latitude" => 38.170284,
+                    "longitude" => -119.076024,
+                    "temperature" => 50
+                ]
+            ],
+            "received_at" => "2025-09-17T09:19:00.730681063Z",
+            "simulated" => true
+        ];
+        
+        // Create a new request with the sample payload
+        $testRequest = new Request($sampleLoRaWANPayload);
+        
+        // Call the actual webhook method
+        $response = $this->webhook($testRequest);
+        
+        return response()->json([
+            'test_status' => 'completed',
+            'webhook_response' => $response->getData(),
+            'sample_payload_used' => true,
+            'message' => 'Test LoRaWAN webhook executed successfully'
+        ]);
+    }
 }
