@@ -87,6 +87,12 @@
                         <span>How to LoRaWAN</span>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="{{route('app.mqtt-guide')}}" class="nav-link {{ request()->routeIs('app.mqtt-guide') ? 'active' : '' }}">
+                        <i class="ph-wifi-high"></i>
+                        <span>How to MQTT</span>
+                    </a>
+                </li>
 
             </ul>
         </div>

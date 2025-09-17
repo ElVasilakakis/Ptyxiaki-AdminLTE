@@ -49,6 +49,11 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
     Route::get('/lorawan-guide', function () {
         return view('application.lorawan-guide');
     })->name('app.lorawan-guide');
+    
+    // MQTT Guide Route
+    Route::get('/mqtt-guide', function () {
+        return view('application.mqtt-guide');
+    })->name('app.mqtt-guide');
 
     Route::group(['prefix' => 'lands'], function () {
         Route::get('/', [LandsController::class, 'index'])->name('app.lands.index');
