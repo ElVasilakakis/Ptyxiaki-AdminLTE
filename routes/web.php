@@ -44,6 +44,11 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
     Route::get('/documentation', function () {
         return view('application.documentation');
     })->name('app.documentation');
+    
+    // LoRaWAN Guide Route
+    Route::get('/lorawan-guide', function () {
+        return view('application.lorawan-guide');
+    })->name('app.lorawan-guide');
 
     Route::group(['prefix' => 'lands'], function () {
         Route::get('/', [LandsController::class, 'index'])->name('app.lands.index');

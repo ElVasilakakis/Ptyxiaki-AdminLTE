@@ -76,9 +76,15 @@
                     <i class="ph-dots-three sidebar-resize-show"></i>
                 </li>
                 <li class="nav-item">
-                    <a href="{{route('app.documentation')}}" class="nav-link">
+                    <a href="{{route('app.documentation')}}" class="nav-link {{ request()->routeIs('app.documentation') ? 'active' : '' }}">
                         <i class="ph-file-code"></i>
                         <span>How To</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{route('app.lorawan-guide')}}" class="nav-link {{ request()->routeIs('app.lorawan-guide') ? 'active' : '' }}">
+                        <i class="ph-broadcast"></i>
+                        <span>How to LoRaWAN</span>
                     </a>
                 </li>
 
