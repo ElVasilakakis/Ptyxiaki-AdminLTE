@@ -15,11 +15,17 @@
     // Get CSRF token
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-    // DEBUG: Log initial data
-    console.log('🔧 LoRaWAN Device Data:', device);
-    console.log('🔧 LoRaWAN Network Server Config:', mqttBroker);
-    console.log('🔧 Land Data:', landData);
-    console.log('🔧 Previous Sensors:', previousSensors);
+    // Store last sensor data to avoid unnecessary updates
+    let lastSensorData = {};
+    let debugMode = false; // Set to true for detailed logging
+    
+    // DEBUG: Log initial data (only in debug mode)
+    if (debugMode) {
+        console.log('🔧 LoRaWAN Device Data:', device);
+        console.log('🔧 LoRaWAN Network Server Config:', mqttBroker);
+        console.log('🔧 Land Data:', landData);
+        console.log('🔧 Previous Sensors:', previousSensors);
+    }
 
     // Initialize map
     function initMap() {
@@ -110,12 +116,12 @@
         // Poll data immediately
         pollLorawanData();
 
-        // Set up polling interval (every 3 seconds for real-time updates)
+        // Set up polling interval (every 30 seconds to reduce server load)
         lorawanPollingInterval = setInterval(function() {
             pollLorawanData();
-        }, 3000);
+        }, 30000);
 
-        console.log('✅ LoRaWAN polling started (3 second intervals)');
+        console.log('✅ LoRaWAN polling started (30 second intervals)');
     }
 
     // Stop LoRaWAN data polling
@@ -138,7 +144,7 @@
 
     // Poll LoRaWAN sensor data - SIMPLIFIED to use existing getSensorData API
     async function pollLorawanData() {
-        console.log('🔍 Polling LoRaWAN sensor data...');
+        if (debugMode) console.log('🔍 Polling LoRaWAN sensor data...');
 
         try {
             // Use the existing getSensorData API endpoint
@@ -155,10 +161,18 @@
             }
 
             const data = await response.json();
-            console.log('📡 LoRaWAN sensor data received:', data);
+            if (debugMode) console.log('📡 LoRaWAN sensor data received:', data);
             
             if (data.success) {
-                console.log('✅ LoRaWAN sensor data updated successfully');
+                if (debugMode) console.log('✅ LoRaWAN sensor data updated successfully');
+                
+                // Check if data has actually changed
+                const dataHash = JSON.stringify(data.sensors);
+                if (lastSensorData.hash === dataHash) {
+                    if (debugMode) console.log('📊 No sensor data changes detected, skipping update');
+                    return;
+                }
+                lastSensorData.hash = dataHash;
                 
                 // Update device status
                 if (data.device_status) {
@@ -167,7 +181,7 @@
 
                 // Process sensor data
                 if (data.sensors && data.sensors.length > 0) {
-                    console.log('📊 Processing', data.sensors.length, 'sensor readings');
+                    if (debugMode) console.log('📊 Processing', data.sensors.length, 'sensor readings');
                     data.sensors.forEach(sensor => {
                         updateSensorTable(sensor);
                     });
