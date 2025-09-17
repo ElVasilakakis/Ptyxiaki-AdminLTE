@@ -157,7 +157,7 @@
                                 <p class="mb-2">Your LoRaWAN device should send data in this format through The Things Network:</p>
                                 
                                 <div class="bg-dark text-light p-3 rounded mb-3">
-                                    <pre class="mb-0"><code>{
+                                    <pre class="mb-0"><code style="color: black">{
   "end_device_ids": {
     "device_id": "your-device-id",
     "application_ids": {
