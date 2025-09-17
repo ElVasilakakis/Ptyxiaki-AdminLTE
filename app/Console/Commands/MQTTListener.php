@@ -375,53 +375,232 @@ class MQTTListener extends Command
         $sensorsUpdated = 0;
         $timestamp = Carbon::now();
         
-        foreach ($payload as $key => $value) {
-            // Skip non-sensor data
-            if (in_array($key, ['timestamp', 'device_id', 'message_id', 'qos', 'retain'])) {
-                continue;
-            }
+        // Check if payload has a 'sensors' array (new format)
+        if (isset($payload['sensors']) && is_array($payload['sensors'])) {
+            $this->info("🔍 Processing sensors array format");
             
-            // Determine sensor type and unit
-            $sensorInfo = $this->determineSensorInfo($key, $value, $topic);
-            
-            if (!$sensorInfo) {
-                $this->warn("⚠️ Skipping unknown sensor data: {$key} = {$value}");
-                continue;
-            }
-            
-            // Find or create sensor
-            $sensor = Sensor::firstOrCreate(
-                [
-                    'device_id' => $device->id,
+            foreach ($payload['sensors'] as $sensorData) {
+                if (!is_array($sensorData) || !isset($sensorData['type']) || !isset($sensorData['value'])) {
+                    $this->warn("⚠️ Skipping invalid sensor data: " . json_encode($sensorData));
+                    continue;
+                }
+                
+                $sensorType = $sensorData['type'];
+                $sensorValue = $sensorData['value'];
+                $sensorSubtype = $sensorData['subtype'] ?? null;
+                
+                // Handle geolocation sensors with subtypes
+                if ($sensorType === 'geolocation' && $sensorSubtype) {
+                    $sensorType = $sensorSubtype; // Use 'latitude' or 'longitude' as the type
+                }
+                
+                // Parse value to extract numeric part and unit
+                $parsedValue = $this->parseValueWithUnit($sensorValue);
+                
+                // Determine sensor info
+                $sensorInfo = $this->determineSensorInfoFromType($sensorType, $parsedValue['unit']);
+                
+                // Find or create sensor
+                $sensor = Sensor::firstOrCreate(
+                    [
+                        'device_id' => $device->id,
+                        'sensor_type' => $sensorInfo['type'],
+                        'sensor_name' => $sensorInfo['name']
+                    ],
+                    [
+                        'user_id' => $device->user_id,
+                        'description' => 'MQTT ' . $sensorInfo['name'] . ' sensor',
+                        'location' => $device->location,
+                        'unit' => $sensorInfo['unit'],
+                        'enabled' => true,
+                        'alert_enabled' => false,
+                    ]
+                );
+                
+                // Update sensor reading with numeric value
+                $sensor->updateReading($parsedValue['value'], $timestamp);
+                $sensorsUpdated++;
+                
+                $this->line("  📊 {$sensor->sensor_name}: {$parsedValue['value']} {$sensorInfo['unit']}");
+                
+                Log::info('MQTT Sensor Updated', [
+                    'device_id' => $device->device_id,
                     'sensor_type' => $sensorInfo['type'],
-                    'sensor_name' => $sensorInfo['name']
-                ],
-                [
-                    'user_id' => $device->user_id,
-                    'description' => 'MQTT ' . $sensorInfo['name'] . ' sensor',
-                    'location' => $device->location,
+                    'sensor_name' => $sensor->sensor_name,
+                    'value' => $parsedValue['value'],
                     'unit' => $sensorInfo['unit'],
-                    'enabled' => true,
-                    'alert_enabled' => false,
-                ]
-            );
+                    'timestamp' => $timestamp->toDateTimeString()
+                ]);
+            }
+        } else {
+            // Fallback to old flat format
+            $this->info("🔍 Processing flat payload format");
             
-            // Update sensor reading
-            $sensor->updateReading($value, $timestamp);
-            $sensorsUpdated++;
-            
-            $this->line("  📊 {$sensor->sensor_name}: {$value} {$sensorInfo['unit']}");
-            
-            Log::info('MQTT Sensor Updated', [
-                'device_id' => $device->device_id,
-                'sensor_type' => $sensorInfo['type'],
-                'sensor_name' => $sensor->sensor_name,
-                'value' => $value,
-                'timestamp' => $timestamp->toDateTimeString()
-            ]);
+            foreach ($payload as $key => $value) {
+                // Skip non-sensor data
+                if (in_array($key, ['timestamp', 'device_id', 'message_id', 'qos', 'retain'])) {
+                    continue;
+                }
+                
+                // Determine sensor type and unit
+                $sensorInfo = $this->determineSensorInfo($key, $value, $topic);
+                
+                if (!$sensorInfo) {
+                    $this->warn("⚠️ Skipping unknown sensor data: {$key} = {$value}");
+                    continue;
+                }
+                
+                // Find or create sensor
+                $sensor = Sensor::firstOrCreate(
+                    [
+                        'device_id' => $device->id,
+                        'sensor_type' => $sensorInfo['type'],
+                        'sensor_name' => $sensorInfo['name']
+                    ],
+                    [
+                        'user_id' => $device->user_id,
+                        'description' => 'MQTT ' . $sensorInfo['name'] . ' sensor',
+                        'location' => $device->location,
+                        'unit' => $sensorInfo['unit'],
+                        'enabled' => true,
+                        'alert_enabled' => false,
+                    ]
+                );
+                
+                // Update sensor reading
+                $sensor->updateReading($value, $timestamp);
+                $sensorsUpdated++;
+                
+                $this->line("  📊 {$sensor->sensor_name}: {$value} {$sensorInfo['unit']}");
+                
+                Log::info('MQTT Sensor Updated', [
+                    'device_id' => $device->device_id,
+                    'sensor_type' => $sensorInfo['type'],
+                    'sensor_name' => $sensor->sensor_name,
+                    'value' => $value,
+                    'timestamp' => $timestamp->toDateTimeString()
+                ]);
+            }
         }
         
         return $sensorsUpdated;
+    }
+
+    /**
+     * Parse value with unit (e.g., "56.4 celsius" -> ["value" => 56.4, "unit" => "celsius"])
+     */
+    private function parseValueWithUnit($valueString)
+    {
+        if (is_numeric($valueString)) {
+            return ['value' => (float)$valueString, 'unit' => ''];
+        }
+        
+        $valueString = trim($valueString);
+        
+        // Try to extract numeric value and unit
+        if (preg_match('/^([+-]?\d*\.?\d+)\s*(.*)$/', $valueString, $matches)) {
+            $numericValue = (float)$matches[1];
+            $unit = trim($matches[2]);
+            
+            return ['value' => $numericValue, 'unit' => $unit];
+        }
+        
+        // If no numeric value found, return as is
+        return ['value' => $valueString, 'unit' => ''];
+    }
+
+    /**
+     * Determine sensor information from sensor type and detected unit
+     */
+    private function determineSensorInfoFromType($sensorType, $detectedUnit = '')
+    {
+        // Sensor type mappings with priority for detected units
+        $sensorMappings = [
+            // Temperature sensors
+            'thermal' => ['type' => 'thermal', 'name' => 'Thermal', 'unit' => '°C'],
+            'temperature' => ['type' => 'temperature', 'name' => 'Temperature', 'unit' => '°C'],
+            'temp' => ['type' => 'temperature', 'name' => 'Temperature', 'unit' => '°C'],
+            'celsius' => ['type' => 'temperature', 'name' => 'Temperature', 'unit' => '°C'],
+            
+            // Humidity sensors
+            'humidity' => ['type' => 'humidity', 'name' => 'Humidity', 'unit' => '%'],
+            'humid' => ['type' => 'humidity', 'name' => 'Humidity', 'unit' => '%'],
+            'rh' => ['type' => 'humidity', 'name' => 'Humidity', 'unit' => '%'],
+            
+            // Pressure sensors
+            'pressure' => ['type' => 'pressure', 'name' => 'Pressure', 'unit' => 'hPa'],
+            'press' => ['type' => 'pressure', 'name' => 'Pressure', 'unit' => 'hPa'],
+            'atm' => ['type' => 'pressure', 'name' => 'Pressure', 'unit' => 'hPa'],
+            
+            // Light sensors
+            'light' => ['type' => 'light', 'name' => 'Light', 'unit' => '%'],
+            'lux' => ['type' => 'light', 'name' => 'Light', 'unit' => 'lux'],
+            'brightness' => ['type' => 'light', 'name' => 'Light', 'unit' => 'lux'],
+            
+            // Motion sensors
+            'motion' => ['type' => 'motion', 'name' => 'Motion', 'unit' => ''],
+            'pir' => ['type' => 'motion', 'name' => 'Motion', 'unit' => ''],
+            'movement' => ['type' => 'motion', 'name' => 'Motion', 'unit' => ''],
+            
+            // Battery sensors
+            'battery' => ['type' => 'battery', 'name' => 'Battery', 'unit' => '%'],
+            'bat' => ['type' => 'battery', 'name' => 'Battery', 'unit' => '%'],
+            'power' => ['type' => 'battery', 'name' => 'Battery', 'unit' => '%'],
+            
+            // Potentiometer sensors
+            'potentiometer' => ['type' => 'potentiometer', 'name' => 'Potentiometer', 'unit' => '%'],
+            'pot' => ['type' => 'potentiometer', 'name' => 'Potentiometer', 'unit' => '%'],
+            
+            // GPS sensors
+            'latitude' => ['type' => 'latitude', 'name' => 'Latitude', 'unit' => '°'],
+            'lat' => ['type' => 'latitude', 'name' => 'Latitude', 'unit' => '°'],
+            'longitude' => ['type' => 'longitude', 'name' => 'Longitude', 'unit' => '°'],
+            'lng' => ['type' => 'longitude', 'name' => 'Longitude', 'unit' => '°'],
+            'lon' => ['type' => 'longitude', 'name' => 'Longitude', 'unit' => '°'],
+            
+            // Generic sensors
+            'value' => ['type' => 'sensor', 'name' => 'Sensor Value', 'unit' => ''],
+            'data' => ['type' => 'sensor', 'name' => 'Sensor Data', 'unit' => ''],
+        ];
+        
+        $lowerType = strtolower($sensorType);
+        
+        if (isset($sensorMappings[$lowerType])) {
+            $sensorInfo = $sensorMappings[$lowerType];
+            
+            // Override unit if we detected one from the value
+            if (!empty($detectedUnit)) {
+                $sensorInfo['unit'] = $this->normalizeUnit($detectedUnit);
+            }
+            
+            return $sensorInfo;
+        }
+        
+        // If not found in mappings, create generic sensor
+        return [
+            'type' => $lowerType,
+            'name' => ucfirst(str_replace('_', ' ', $sensorType)),
+            'unit' => !empty($detectedUnit) ? $this->normalizeUnit($detectedUnit) : ''
+        ];
+    }
+
+    /**
+     * Normalize unit names to standard formats
+     */
+    private function normalizeUnit($unit)
+    {
+        $unitMappings = [
+            'celsius' => '°C',
+            'fahrenheit' => '°F',
+            'percent' => '%',
+            'percentage' => '%',
+            'degrees' => '°',
+            'degree' => '°',
+        ];
+        
+        $lowerUnit = strtolower(trim($unit));
+        
+        return $unitMappings[$lowerUnit] ?? $unit;
     }
 
     /**
