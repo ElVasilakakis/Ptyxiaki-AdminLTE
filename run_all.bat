@@ -22,7 +22,8 @@ echo - MQTT Listener: Listening for MQTT devices
 echo.
 echo LoRaWAN Configuration:
 echo - LoRaWAN devices use HTTP webhooks (not MQTT)
-echo - Webhook endpoint: http://127.0.0.1:8000/api/lorawan/webhook
+echo - Getting webhook URL for current environment...
+php get_webhook_url.php
 echo - Configure this URL in The Things Stack console
 echo.
 echo Press any key to close this window...
