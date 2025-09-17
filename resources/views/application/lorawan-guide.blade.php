@@ -113,7 +113,8 @@
                                                     <li class="mb-1">• Go to your Application</li>
                                                     <li class="mb-1">• Click "Integrations" → "Webhooks"</li>
                                                     <li class="mb-1">• Add new webhook</li>
-                                                    <li class="mb-1">• <strong>Webhook URL:</strong> {{ url('/api/lorawan/webhook') }}</li>
+                                                    <li class="mb-1">• <strong>Base URL:</strong> {{ url('/') }}</li>
+                                                    <li class="mb-1">• <strong>Uplink message:</strong> /api/lorawan/webhook</li>
                                                     <li class="mb-1">• <strong>Format:</strong> JSON</li>
                                                 </ul>
                                                 <p class="mb-0 text-success">✓ Save the webhook</p>
@@ -142,6 +143,68 @@
                                     </div>
                                 </div>
 
+                            </div>
+                        </div>
+
+                        <!-- Payload Documentation -->
+                        <div class="mt-5">
+                            <h6 class="fw-semibold text-secondary mb-3">
+                                <i class="ph-code me-2"></i>Payload Format Information
+                            </h6>
+                            
+                            <div class="alert alert-secondary">
+                                <h6 class="fw-semibold mb-2">Expected LoRaWAN Payload Format</h6>
+                                <p class="mb-2">Your LoRaWAN device should send data in this format through The Things Network:</p>
+                                
+                                <div class="bg-dark text-light p-3 rounded mb-3">
+                                    <pre class="mb-0"><code>{
+  "end_device_ids": {
+    "device_id": "your-device-id",
+    "application_ids": {
+      "application_id": "your-app-id"
+    }
+  },
+  "uplink_message": {
+    "decoded_payload": {
+      "temperature": 25.6,
+      "humidity": 65.2,
+      "battery": 85,
+      "altitude": 150,
+      "latitude": 38.170284,
+      "longitude": -119.076024,
+      "gps_fix": 2,
+      "gps_fix_type": "3D Fix"
+    }
+  },
+  "received_at": "2025-09-17T09:19:00.730681063Z"
+}</code></pre>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="fw-semibold mb-2">Supported Sensor Types:</h6>
+                                        <ul class="list-unstyled">
+                                            <li class="mb-1">• <strong>temperature</strong> - Temperature in °C</li>
+                                            <li class="mb-1">• <strong>humidity</strong> - Humidity in %</li>
+                                            <li class="mb-1">• <strong>battery</strong> - Battery level in %</li>
+                                            <li class="mb-1">• <strong>altitude</strong> - Altitude in meters</li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="fw-semibold mb-2">GPS Data:</h6>
+                                        <ul class="list-unstyled">
+                                            <li class="mb-1">• <strong>latitude</strong> - GPS latitude in degrees</li>
+                                            <li class="mb-1">• <strong>longitude</strong> - GPS longitude in degrees</li>
+                                            <li class="mb-1">• <strong>gps_fix</strong> - GPS fix quality (0-3)</li>
+                                            <li class="mb-1">• <strong>gps_fix_type</strong> - Fix type description</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                
+                                <div class="alert alert-info mt-3 mb-0">
+                                    <i class="ph-info me-2"></i>
+                                    <strong>Note:</strong> The system automatically detects and creates sensors for any data in the decoded_payload. Unknown sensor types will be created with generic names and units.
+                                </div>
                             </div>
                         </div>
 
