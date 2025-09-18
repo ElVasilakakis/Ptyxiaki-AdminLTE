@@ -450,6 +450,98 @@
         }
     }
 
+    // Locate device function - centers map on device location
+    function locateDevice() {
+        console.log('🎯 Locate device button clicked');
+        
+        const locateBtn = document.getElementById('locate-device-btn');
+        if (locateBtn) {
+            // Add loading state
+            const originalContent = locateBtn.innerHTML;
+            locateBtn.innerHTML = '<i class="ph-spinner ph-spin me-1"></i>Locating...';
+            locateBtn.disabled = true;
+        }
+        
+        // Try to get coordinates from sensors first
+        const latSensor = previousSensors.find(s => s.sensor_type === 'latitude');
+        const lngSensor = previousSensors.find(s => s.sensor_type === 'longitude');
+        
+        let deviceLat = null;
+        let deviceLng = null;
+        let locationSource = 'unknown';
+        
+        // Check sensor data first
+        if (latSensor && lngSensor && latSensor.value !== null && lngSensor.value !== null) {
+            deviceLat = parseFloat(latSensor.value);
+            deviceLng = parseFloat(lngSensor.value);
+            locationSource = 'sensors';
+            console.log('📍 Using sensor coordinates:', deviceLat, deviceLng);
+        } 
+        // Fallback to device current_location
+        else if (device.current_location && device.current_location.coordinates) {
+            deviceLat = device.current_location.coordinates[1];
+            deviceLng = device.current_location.coordinates[0];
+            locationSource = 'current_location';
+            console.log('📍 Using current location:', deviceLat, deviceLng);
+        } 
+        // Fallback to device location
+        else if (device.location && device.location.coordinates) {
+            deviceLat = device.location.coordinates[1];
+            deviceLng = device.location.coordinates[0];
+            locationSource = 'device_location';
+            console.log('📍 Using device location:', deviceLat, deviceLng);
+        }
+        
+        if (deviceLat !== null && deviceLng !== null && !isNaN(deviceLat) && !isNaN(deviceLng)) {
+            console.log('✅ Valid coordinates found, centering map');
+            
+            // Center map on device location with smooth animation
+            if (map) {
+                map.setView([deviceLat, deviceLng], 15, {
+                    animate: true,
+                    duration: 1.5
+                });
+                
+                // Update or add device marker
+                addDeviceMarker(deviceLat, deviceLng, `Location from ${locationSource}`);
+                
+                // Flash the marker for visual feedback
+                if (deviceMarker) {
+                    setTimeout(() => {
+                        deviceMarker.openPopup();
+                    }, 1000);
+                }
+                
+                console.log('🗺️ Map centered on device location');
+            }
+            
+            // Reset button after successful location
+            setTimeout(() => {
+                if (locateBtn) {
+                    locateBtn.innerHTML = '<i class="ph-crosshairs me-1"></i>Locate Device';
+                    locateBtn.disabled = false;
+                }
+            }, 1500);
+        } else {
+            console.warn('⚠️ No valid device coordinates found');
+            
+            // Show error state
+            if (locateBtn) {
+                locateBtn.innerHTML = '<i class="ph-warning me-1"></i>No Location';
+                locateBtn.classList.add('btn-outline-warning');
+                locateBtn.classList.remove('btn-outline-primary');
+                
+                // Reset button after error
+                setTimeout(() => {
+                    locateBtn.innerHTML = '<i class="ph-crosshairs me-1"></i>Locate Device';
+                    locateBtn.classList.remove('btn-outline-warning');
+                    locateBtn.classList.add('btn-outline-primary');
+                    locateBtn.disabled = false;
+                }, 3000);
+            }
+        }
+    }
+
     // Update geofence status for location sensors in the table
     function updateGeofenceStatusInTable() {
         const latSensor = previousSensors.find(s => s.sensor_type === 'latitude');

@@ -68,7 +68,12 @@
     <!-- Map -->
     <div class="row mb-4">
         <div class="col-12">
-            <h6 class="fw-semibold mb-3">Device Location</h6>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-semibold mb-0">Device Location</h6>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="locate-device-btn" onclick="locateDevice()" title="Center map on device location">
+                    <i class="ph-crosshairs me-1"></i>Locate Device
+                </button>
+            </div>
             <div id="map"></div>
         </div>
     </div>
