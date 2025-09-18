@@ -2,6 +2,33 @@
 
 @section('scripts')
 <script>
+// Handle broker type change to show/hide authentication section
+function handleBrokerTypeChange() {
+    const brokerType = document.querySelector('select[name="type"]').value;
+    const authSection = document.getElementById('authentication-section');
+    
+    if (brokerType === 'lorawan') {
+        // Hide authentication section for webhook
+        authSection.style.display = 'none';
+        // Clear authentication fields when hidden
+        document.querySelector('input[name="username"]').value = '';
+        document.querySelector('input[name="password"]').value = '';
+    } else {
+        // Show authentication section for MQTT brokers
+        authSection.style.display = 'block';
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const typeSelect = document.querySelector('select[name="type"]');
+    if (typeSelect) {
+        typeSelect.addEventListener('change', handleBrokerTypeChange);
+        // Check initial state
+        handleBrokerTypeChange();
+    }
+});
+
 function testConnectionFromForm() {
     const button = event.target;
     const originalContent = button.innerHTML;
@@ -161,9 +188,8 @@ function showNotification(message, type) {
                                     <label class="form-label">Broker Type <span class="text-danger">*</span></label>
                                     <select name="type" class="form-select @error('type') is-invalid @enderror" required>
                                         <option value="">Select broker type</option>
-                                        <option value="mosquitto" {{ old('type') == 'mosquitto' ? 'selected' : '' }}>Mosquitto</option>
-                                        <option value="emqx" {{ old('type') == 'emqx' ? 'selected' : '' }}>EMQX</option>
-                                        <option value="lorawan" {{ old('type') == 'lorawan' ? 'selected' : '' }}>LoRaWAN</option>
+                                        <option value="emqx" {{ old('type') == 'emqx' ? 'selected' : '' }}>MQTT</option>
+                                        <option value="lorawan" {{ old('type') == 'lorawan' ? 'selected' : '' }}>Webhook</option>
                                     </select>
                                     @error('type')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -218,7 +244,7 @@ function showNotification(message, type) {
                             </div>
 
                             <!-- Authentication -->
-                            <div class="row mb-4">
+                            <div class="row mb-4" id="authentication-section">
                                 <div class="col-12">
                                     <h6 class="fw-semibold">Authentication</h6>
                                     <hr class="my-2">
