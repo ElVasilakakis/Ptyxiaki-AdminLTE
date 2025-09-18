@@ -140,6 +140,7 @@
                             <tr>
                                 <th>Sensor</th>
                                 <th>Value</th>
+                                <th>Thresholds</th>
                                 <th>Status</th>
                                 <th>Alert</th>
                                 <th>Last Update</th>
@@ -148,27 +149,78 @@
                         <tbody id="sensors-table-body">
                             @if ($device->sensors->count() > 0)
                                 @foreach ($device->sensors as $sensor)
+                                    @php
+                                        $isGeoSensor = in_array($sensor->sensor_type, ['latitude', 'longitude']);
+                                        $alertStatus = $sensor->getAlertStatus();
+                                        $alertClass = $alertStatus === 'normal' ? 'normal' : ($alertStatus === 'high' ? 'high' : 'low');
+                                        $alertText = $alertStatus === 'normal' ? 'Normal' : ($alertStatus === 'high' ? 'High Alert' : 'Low Alert');
+                                    @endphp
                                     <tr class="sensor-row" data-sensor-type="{{ $sensor->sensor_type }}">
                                         <td>
                                             <div class="d-flex align-items-center">
-                                                <i class="ph-thermometer me-2 text-primary"></i>
+                                                @if($isGeoSensor)
+                                                    <i class="ph-map-pin me-2 text-success"></i>
+                                                @else
+                                                    <i class="ph-thermometer me-2 text-primary"></i>
+                                                @endif
                                                 <div>
-                                                    <div class="fw-medium">{{ $sensor->sensor_type }}</div>
-                                                    <small class="text-muted">{{ $sensor->sensor_name }}</small>
+                                                    <div class="fw-medium">{{ ucfirst($sensor->sensor_type) }}</div>
+                                                    <small class="text-muted">{{ $sensor->sensor_name ?: 'Unnamed' }}</small>
                                                 </div>
                                             </div>
                                         </td>
                                         <td class="sensor-value fw-semibold">{{ $sensor->getFormattedValue() }}</td>
+                                        <td class="sensor-thresholds">
+                                            @if($isGeoSensor)
+                                                <div class="geofence-status" id="geofence-status-{{ $sensor->sensor_type }}">
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary">
+                                                        <i class="ph-map-trifold me-1"></i>
+                                                        Checking...
+                                                    </span>
+                                                </div>
+                                            @elseif($sensor->alert_enabled && ($sensor->alert_threshold_min !== null || $sensor->alert_threshold_max !== null))
+                                                <div class="threshold-info">
+                                                    @if($sensor->alert_threshold_min !== null)
+                                                        <small class="text-muted d-block">
+                                                            <i class="ph-arrow-down me-1"></i>
+                                                            Min: {{ $sensor->alert_threshold_min }}{{ $sensor->unit ? ' ' . $sensor->unit : '' }}
+                                                        </small>
+                                                    @endif
+                                                    @if($sensor->alert_threshold_max !== null)
+                                                        <small class="text-muted d-block">
+                                                            <i class="ph-arrow-up me-1"></i>
+                                                            Max: {{ $sensor->alert_threshold_max }}{{ $sensor->unit ? ' ' . $sensor->unit : '' }}
+                                                        </small>
+                                                    @endif
+                                                    @if($sensor->value !== null && is_numeric($sensor->value))
+                                                        @php
+                                                            $value = (float)$sensor->value;
+                                                            $withinRange = true;
+                                                            if($sensor->alert_threshold_min !== null && $value < $sensor->alert_threshold_min) {
+                                                                $withinRange = false;
+                                                            }
+                                                            if($sensor->alert_threshold_max !== null && $value > $sensor->alert_threshold_max) {
+                                                                $withinRange = false;
+                                                            }
+                                                        @endphp
+                                                        <span class="badge bg-{{ $withinRange ? 'success' : 'danger' }} bg-opacity-10 text-{{ $withinRange ? 'success' : 'danger' }} mt-1">
+                                                            <i class="ph-{{ $withinRange ? 'check-circle' : 'warning-circle' }} me-1"></i>
+                                                            {{ $withinRange ? 'Within Range' : 'Out of Range' }}
+                                                        </span>
+                                                    @endif
+                                                </div>
+                                            @else
+                                                <span class="text-muted">
+                                                    <i class="ph-minus me-1"></i>
+                                                    No thresholds set
+                                                </span>
+                                            @endif
+                                        </td>
                                         <td class="sensor-status">
                                             <span class="sensor-status-indicator {{ $sensor->hasRecentReading() ? 'sensor-status-online' : 'sensor-status-offline' }}"></span>
                                             <span class="status-text">{{ $sensor->hasRecentReading() ? 'Online' : 'Offline' }}</span>
                                         </td>
                                         <td class="sensor-alert">
-                                            @php
-                                                $alertStatus = $sensor->getAlertStatus();
-                                                $alertClass = $alertStatus === 'normal' ? 'normal' : ($alertStatus === 'high' ? 'high' : 'low');
-                                                $alertText = $alertStatus === 'normal' ? 'Normal' : ($alertStatus === 'high' ? 'High Alert' : 'Low Alert');
-                                            @endphp
                                             <span class="alert-badge {{ $alertClass }}">{{ $alertText }}</span>
                                         </td>
                                         <td class="sensor-last-update last-update">{{ $sensor->getTimeSinceLastReading() ?? 'No readings yet' }}</td>
@@ -176,7 +228,7 @@
                                 @endforeach
                             @else
                                 <tr id="no-sensors-row">
-                                    <td colspan="5" class="text-center text-muted py-4">
+                                    <td colspan="6" class="text-center text-muted py-4">
                                         <i class="ph-broadcast me-2"></i>
                                         Waiting for LoRaWAN uplink data...
                                     </td>

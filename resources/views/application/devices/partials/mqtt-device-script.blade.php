@@ -821,12 +821,69 @@
                 }
             }
 
+            // Update geofence status for location sensors in the table
+            function updateGeofenceStatusInTable() {
+                const latSensor = previousSensors.find(s => s.sensor_type === 'latitude');
+                const lngSensor = previousSensors.find(s => s.sensor_type === 'longitude');
+                
+                if (latSensor && lngSensor && latSensor.value !== null && lngSensor.value !== null) {
+                    const lat = parseFloat(latSensor.value);
+                    const lng = parseFloat(lngSensor.value);
+                    
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        const isInside = checkLocationStatus(lat, lng);
+                        
+                        // Update latitude geofence status
+                        const latGeofenceElement = document.getElementById('geofence-status-latitude');
+                        if (latGeofenceElement) {
+                            updateGeofenceElement(latGeofenceElement, isInside);
+                        }
+                        
+                        // Update longitude geofence status
+                        const lngGeofenceElement = document.getElementById('geofence-status-longitude');
+                        if (lngGeofenceElement) {
+                            updateGeofenceElement(lngGeofenceElement, isInside);
+                        }
+                    }
+                }
+            }
+            
+            function updateGeofenceElement(element, isInside) {
+                if (isInside === true) {
+                    element.innerHTML = `
+                        <span class="badge bg-success bg-opacity-10 text-success">
+                            <i class="ph-check-circle me-1"></i>
+                            Inside Land
+                        </span>
+                    `;
+                } else if (isInside === false) {
+                    element.innerHTML = `
+                        <span class="badge bg-danger bg-opacity-10 text-danger">
+                            <i class="ph-warning-circle me-1"></i>
+                            Outside Land
+                        </span>
+                    `;
+                } else {
+                    element.innerHTML = `
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary">
+                            <i class="ph-map-trifold me-1"></i>
+                            Unknown
+                        </span>
+                    `;
+                }
+            }
+
             // Initialize everything when page loads
             document.addEventListener('DOMContentLoaded', function() {
                 console.log('🚀 Page loaded, initializing application...');
                 
                 initMap();
                 updateMqttStatus('disconnected');
+                
+                // Update geofence status after map is initialized
+                setTimeout(() => {
+                    updateGeofenceStatusInTable();
+                }, 1000);
 
                 const connectBtn = document.getElementById('connect-btn');
                 if (connectBtn) {
