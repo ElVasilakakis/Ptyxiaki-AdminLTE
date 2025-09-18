@@ -162,7 +162,7 @@
                                 <p class="mb-2">Your MQTT device should send data in this JSON format to the webhook endpoint:</p>
                                 
                                 <div class="bg-dark text-light p-3 rounded mb-3">
-                                    <pre class="mb-0"><code class="text-white">{
+                                    <pre class="mb-0"><code class="text-black">{
   "sensors": [
     {
       "type": "thermal",
