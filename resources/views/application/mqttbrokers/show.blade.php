@@ -4,7 +4,7 @@
     <div class="page-header-content d-lg-flex">
         <div class="d-flex">
             <h4 class="page-title mb-0">
-                Connector: {{ $mqttBroker->name }} - <span class="fw-normal">Connection & Device Management</span>
+                Connector: {{ $mqttbroker->name }} - <span class="fw-normal">Connection & Device Management</span>
             </h4>
 
             <a href="#page_header"
