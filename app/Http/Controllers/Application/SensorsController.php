@@ -11,14 +11,67 @@ use Illuminate\Support\Facades\Validator;
 
 class SensorsController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $sensors = Sensor::forUser(Auth::id())
-            ->with(['device', 'device.land'])
-            ->latest('reading_timestamp')
+        $query = Sensor::forUser(Auth::id())
+            ->with(['device', 'device.land']);
+
+        // Apply device filter
+        if ($request->filled('device_id')) {
+            $query->where('device_id', $request->device_id);
+        }
+
+        // Apply sensor type filter
+        if ($request->filled('sensor_type')) {
+            $query->where('sensor_type', $request->sensor_type);
+        }
+
+        // Apply status filter
+        if ($request->filled('status')) {
+            if ($request->status === 'enabled') {
+                $query->where('enabled', true);
+            } elseif ($request->status === 'disabled') {
+                $query->where('enabled', false);
+            }
+        }
+
+        // Apply alert status filter
+        if ($request->filled('alert_status')) {
+            $query->where('alert_enabled', true);
+            if ($request->alert_status !== 'all') {
+                // We'll need to filter by alert status in the view since it's calculated
+            }
+        }
+
+        // Apply search filter
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('sensor_name', 'like', "%{$search}%")
+                  ->orWhere('sensor_type', 'like', "%{$search}%")
+                  ->orWhereHas('device', function($deviceQuery) use ($search) {
+                      $deviceQuery->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Get sensors with pagination
+        $sensors = $query->latest('reading_timestamp')->paginate(15);
+
+        // Get filter options
+        $devices = \App\Models\Device::forUser(Auth::id())
+            ->with('land:id,land_name')
+            ->select('id', 'name', 'land_id')
+            ->orderBy('name')
             ->get();
-        
-        return view('application.sensors.index', compact('sensors'));
+
+        $sensorTypes = Sensor::forUser(Auth::id())
+            ->select('sensor_type')
+            ->distinct()
+            ->orderBy('sensor_type')
+            ->pluck('sensor_type');
+
+        return view('application.sensors.index', compact('sensors', 'devices', 'sensorTypes'));
     }
 
     public function edit(Sensor $sensor)
