@@ -150,7 +150,7 @@
                         if (testBtn) testBtn.style.display = 'none';
                         break;
                     case 'connected':
-                        statusElement.textContent = isPaused ? 'Connected (Paused)' : 'Connected to MQTT Broker';
+                        statusElement.textContent = isPaused ? 'Connected (Paused)' : 'Connected to Connector';
                         connectBtn.textContent = 'Disconnect';
                         connectBtn.disabled = false;
                         if (pauseBtn) pauseBtn.style.display = 'inline-block';

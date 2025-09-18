@@ -39,7 +39,7 @@
                     </td>
                 </tr>
                 <tr>
-                    <td><strong>MQTT Broker:</strong></td>
+                    <td><strong>Connector:</strong></td>
                     <td>{{ $device->mqttBroker->name }}</td>
                 </tr>
                 <tr>
@@ -224,7 +224,7 @@
                                 <tr id="no-sensors-row">
                                     <td colspan="6" class="text-center text-muted py-4">
                                         <i class="ph-broadcast me-2"></i>
-                                        Connect to MQTT broker to see live sensor data
+                                        Connect to connector to see live sensor data
                                     </td>
                                 </tr>
                             @endif

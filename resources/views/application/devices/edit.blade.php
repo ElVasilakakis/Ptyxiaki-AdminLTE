@@ -173,9 +173,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </div>
                                 
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label">MQTT Broker <span class="text-danger">*</span></label>
+                                    <label class="form-label">Connector <span class="text-danger">*</span></label>
                                     <select name="mqtt_broker_id" class="form-select @error('mqtt_broker_id') is-invalid @enderror" required>
-                                        <option value="">Select MQTT broker</option>
+                                        <option value="">Select Connector</option>
                                         @foreach($mqttBrokers as $broker)
                                             <option value="{{ $broker->id }}" {{ old('mqtt_broker_id', $device->mqtt_broker_id) == $broker->id ? 'selected' : '' }}>
                                                 {{ $broker->name }} ({{ $broker->host }}:{{ $broker->port }})

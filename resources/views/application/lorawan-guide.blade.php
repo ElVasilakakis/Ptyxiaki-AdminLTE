@@ -1,6 +1,6 @@
 @extends('layouts.application.app')
 
-@section('title', 'How to LoRaWAN')
+@section('title', 'How to The Things Stack LoRaWAN')
 
 @section('content')
 <div class="content">
@@ -44,7 +44,7 @@
                                     <div class="card-header bg-primary text-white">
                                         <h6 class="mb-0">
                                             <span class="badge bg-white text-primary me-2">1</span>
-                                            Add MQTT Broker
+                                            Add Connector
                                         </h6>
                                     </div>
                                     <div class="card-body">
@@ -52,16 +52,16 @@
                                         <div class="d-flex align-items-start">
                                             <i class="ph-arrow-right text-primary me-2 mt-1"></i>
                                             <div>
-                                                <p class="mb-2">Go to <a href="{{ route('app.mqttbrokers.create') }}" class="fw-semibold">MQTT Brokers → Add New</a></p>
+                                                <p class="mb-2">Go to <a href="{{ route('app.mqttbrokers.create') }}" class="fw-semibold">Connectors → Add New</a></p>
                                                 <p class="mb-2">Fill in these details:</p>
                                                 <ul class="list-unstyled ms-3">
-                                                    <li class="mb-1">• <strong>Name:</strong> "My LoRaWAN Broker"</li>
+                                                    <li class="mb-1">• <strong>Name:</strong> "My Connector"</li>
                                                     <li class="mb-1">• <strong>Host:</strong> Your broker address (like: eu1.cloud.thethings.network)</li>
                                                     <li class="mb-1">• <strong>Port:</strong> 1883</li>
                                                     <li class="mb-1">• <strong>Username:</strong> Your TTN username</li>
                                                     <li class="mb-1">• <strong>Password:</strong> Your TTN password</li>
                                                 </ul>
-                                                <p class="mb-0 text-success">✓ Click "Create Broker"</p>
+                                                <p class="mb-0 text-success">✓ Click "Create Connector"</p>
                                             </div>
                                         </div>
                                     </div>

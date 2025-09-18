@@ -124,7 +124,7 @@ function showNotification(message, type) {
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h6 class="mb-0">Edit MQTT Broker: {{ $mqttbroker->name }}</h6>
+                        <h6 class="mb-0">Edit Connector: {{ $mqttbroker->name }}</h6>
                     </div>
 
                     <div class="card-body">
@@ -334,7 +334,7 @@ function showNotification(message, type) {
                                     <i class="ph-plug me-2"></i>Test Connection
                                 </button>
                                 <button type="submit" class="btn btn-primary">
-                                    Update MQTT Broker <i class="ph-floppy-disk ms-2"></i>
+                                    Update Connector <i class="ph-floppy-disk ms-2"></i>
                                 </button>
                             </div>
                         </form>

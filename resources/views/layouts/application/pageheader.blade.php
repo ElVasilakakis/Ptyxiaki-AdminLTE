@@ -37,7 +37,7 @@
 							<span class="breadcrumb-item active">All Sensors</span>
 						@endif
 					@elseif(in_array('mqttbrokers', $segments))
-						<a href="{{ route('app.mqttbrokers.index') }}" class="breadcrumb-item">MQTT Brokers</a>
+						<a href="{{ route('app.mqttbrokers.index') }}" class="breadcrumb-item">Connectors</a>
 						@if($routeName !== 'app.mqttbrokers.index')
 							<span class="breadcrumb-item active">{{ ucfirst(last($segments)) }}</span>
 						@else

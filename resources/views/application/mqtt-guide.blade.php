@@ -44,18 +44,18 @@
                                     <div class="card-header bg-primary text-white">
                                         <h6 class="mb-0">
                                             <span class="badge bg-white text-primary me-2">1</span>
-                                            Set Up MQTT Broker
+                                            Set Up Connector
                                         </h6>
                                     </div>
                                     <div class="card-body">
-                                        <p class="mb-3">First, you need an MQTT broker to handle messages between your devices and the system.</p>
+                                        <p class="mb-3">First, you need an Connector to handle messages between your devices and the system.</p>
                                         <div class="d-flex align-items-start">
                                             <i class="ph-arrow-right text-primary me-2 mt-1"></i>
                                             <div>
-                                                <p class="mb-2">Go to <a href="{{ route('app.mqttbrokers.create') }}" class="fw-semibold">MQTT Brokers → Add New</a></p>
+                                                <p class="mb-2">Go to <a href="{{ route('app.mqttbrokers.create') }}" class="fw-semibold">Connectors → Add New</a></p>
                                                 <p class="mb-2">Fill in these details:</p>
                                                 <ul class="list-unstyled ms-3">
-                                                    <li class="mb-1">• <strong>Name:</strong> "My MQTT Broker"</li>
+                                                    <li class="mb-1">• <strong>Name:</strong> "My Connector"</li>
                                                     <li class="mb-1">• <strong>Host:</strong> Your broker address (e.g., broker.hivemq.com)</li>
                                                     <li class="mb-1">• <strong>Port:</strong> 1883 (standard) or 8883 (secure)</li>
                                                     <li class="mb-1">• <strong>Username:</strong> Your broker username (if required)</li>
@@ -92,7 +92,7 @@
                                                     <li class="mb-1">• <strong>Name:</strong> "My MQTT Device" (any name you like)</li>
                                                     <li class="mb-1">• <strong>Land:</strong> Choose where your device is located</li>
                                                     <li class="mb-1">• <strong>Protocol:</strong> Select "MQTT"</li>
-                                                    <li class="mb-1">• <strong>MQTT Broker:</strong> Select the broker you created</li>
+                                                    <li class="mb-1">• <strong>Connector:</strong> Select the broker you created</li>
                                                     <li class="mb-1">• <strong>Topic:</strong> The MQTT topic your device publishes to (e.g., "sensors/device1")</li>
                                                 </ul>
                                                 <p class="mb-0 text-success">✓ Click "Create Device"</p>

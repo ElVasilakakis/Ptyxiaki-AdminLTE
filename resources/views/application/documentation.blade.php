@@ -70,21 +70,21 @@
                                         </div>
                                     </div>
 
-                                    <!-- Step 2: MQTT Brokers -->
+                                    <!-- Step 2: Connectors -->
                                     <div class="card border-success mb-3">
                                         <div class="card-header bg-success text-white">
                                             <h6 class="mb-0">
                                                 <span class="badge bg-white text-success me-2">2</span>
-                                                Set Up MQTT Brokers (if using MQTT devices)
+                                                Set Up Connectors(if using MQTT devices)
                                             </h6>
                                         </div>
                                         <div class="card-body">
                                             <div class="d-flex align-items-start">
                                                 <i class="ph-computer-tower text-success fs-4 me-3 mt-1"></i>
                                                 <div>
-                                                    <p class="mb-2"><strong>What are MQTT Brokers?</strong> These are servers that handle message communication between your MQTT devices and this system.</p>
+                                                    <p class="mb-2"><strong>What are Connectors?</strong> These are servers that handle message communication between your MQTT devices and this system.</p>
                                                     <p class="mb-2"><strong>When needed?</strong> Only if you have MQTT devices. Skip this if you only use LoRaWAN devices.</p>
-                                                    <p class="mb-2">Go to <a href="{{ route('app.mqttbrokers.create') }}" class="fw-semibold">MQTT Brokers → Add New</a></p>
+                                                    <p class="mb-2">Go to <a href="{{ route('app.mqttbrokers.create') }}" class="fw-semibold">Connectors → Add New</a></p>
                                                     <p class="mb-0 text-success">✓ Set up brokers for your MQTT devices</p>
                                                 </div>
                                             </div>
@@ -104,7 +104,7 @@
                                                 <i class="ph-cpu text-warning fs-4 me-3 mt-1"></i>
                                                 <div>
                                                     <p class="mb-2"><strong>What are Devices?</strong> These represent your physical IoT devices (sensors, weather stations, etc.) that collect and send data.</p>
-                                                    <p class="mb-2"><strong>Requirements:</strong> You must have created a land first. For MQTT devices, you also need an MQTT broker.</p>
+                                                    <p class="mb-2"><strong>Requirements:</strong> You must have created a land first. For MQTT devices, you also need an Connector.</p>
                                                     <p class="mb-2">Go to <a href="{{ route('app.devices.create') }}" class="fw-semibold">Devices → Add New</a></p>
                                                     <p class="mb-0 text-success">✓ Register all your physical devices</p>
                                                 </div>
@@ -157,9 +157,9 @@
                                     <div class="col-md-6">
                                         <h6 class="fw-semibold mb-2">MQTT Devices:</h6>
                                         <ol class="mb-0">
-                                            <li>Device connects to MQTT broker</li>
-                                            <li>Device publishes sensor data to broker</li>
-                                            <li>System receives data from broker</li>
+                                            <li>Device connects to Connector</li>
+                                            <li>Device publishes sensor data to onnector</li>
+                                            <li>System receives data from connector</li>
                                             <li>Data appears in dashboard and sensors page</li>
                                         </ol>
                                     </div>
@@ -228,7 +228,7 @@
                                     <li><strong>Create a Land:</strong> <a href="{{ route('app.lands.create') }}">Add your first location</a></li>
                                     <li><strong>Set up connectivity:</strong> 
                                         <ul class="mt-1">
-                                            <li>For MQTT devices: <a href="{{ route('app.mqttbrokers.create') }}">Add MQTT Broker</a></li>
+                                            <li>For MQTT devices: <a href="{{ route('app.mqttbrokers.create') }}">Add Connector</a></li>
                                             <li>For LoRaWAN devices: Set up The Things Network account</li>
                                         </ul>
                                     </li>

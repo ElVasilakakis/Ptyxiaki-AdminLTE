@@ -67,7 +67,7 @@
                 <li class="nav-item">
                     <a href="{{ route('app.mqttbrokers.index') }}" class="nav-link {{ request()->routeIs('app.mqttbrokers.*') ? 'active' : '' }}">
                         <i class="ph-computer-tower"></i>
-                        <span>MQTT Brokers</span>
+                        <span>Connectors</span>
                     </a>
                 </li>
 
@@ -84,7 +84,7 @@
                 <li class="nav-item">
                     <a href="{{route('app.lorawan-guide')}}" class="nav-link {{ request()->routeIs('app.lorawan-guide') ? 'active' : '' }}">
                         <i class="ph-broadcast"></i>
-                        <span>How to LoRaWAN</span>
+                        <span>How to The Things Stack LoRaWAN</span>
                     </a>
                 </li>
                 <li class="nav-item">

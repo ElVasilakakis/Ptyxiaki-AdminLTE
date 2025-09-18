@@ -4,7 +4,7 @@
     <div class="page-header-content d-lg-flex">
         <div class="d-flex">
             <h4 class="page-title mb-0">
-                MQTT BROKERS - <span class="fw-normal">View,Manage and Create Brokers</span>
+                Connectors - <span class="fw-normal">View,Manage and Create Brokers</span>
             </h4>
 
             <a href="#page_header"
@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         <div class="card">
             <div class="card-header">
-                <h6 class="mb-0">Your MQTT Brokers</h6>
+                <h6 class="mb-0">Your Connectors</h6>
             </div>
 
                 @if($mqttBrokers->count() > 0)
@@ -308,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                                 <form action="{{ route('app.mqttbrokers.destroy', $broker) }}" 
                                                       method="POST" 
                                                       class="d-inline"
-                                                      onsubmit="return confirm('Are you sure you want to delete this MQTT broker? This action cannot be undone and will affect all connected devices.')">
+                                                      onsubmit="return confirm('Are you sure you want to delete this Connector? This action cannot be undone and will affect all connected devices.')">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit" 
@@ -330,11 +330,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="mb-3">
                             <i class="ph-computer-tower ph-3x text-muted"></i>
                         </div>
-                        <h5 class="text-muted">No MQTT brokers found</h5>
-                        <p class="text-muted">You haven't created any MQTT brokers yet. Click the "Create" button to add your first broker.</p>
+                        <h5 class="text-muted">No Connectors found</h5>
+                        <p class="text-muted">You haven't created any Connectors yet. Click the "Create" button to add your first broker.</p>
                         <a href="{{ route('app.mqttbrokers.create') }}" class="btn btn-primary">
                             <i class="ph-plus-circle me-2"></i>
-                            Create Your First MQTT Broker
+                            Create Your First Connector
                         </a>
                     </div>
                 @endif

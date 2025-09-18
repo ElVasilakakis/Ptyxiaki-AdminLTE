@@ -4,7 +4,7 @@
     <div class="page-header-content d-lg-flex">
         <div class="d-flex">
             <h4 class="page-title mb-0">
-                MQTT BROKER - <span class="fw-normal">{{ $mqttbroker->name }}</span>
+                Connector: {{ $mqttBroker->name }} - <span class="fw-normal">Connection & Device Management</span>
             </h4>
 
             <a href="#page_header"
@@ -28,7 +28,7 @@
                 </a>
                 <a href="{{ route('app.mqttbrokers.index') }}" class="btn btn-outline-primary">
                     <i class="ph-arrow-left me-2"></i>
-                    Back to Brokers
+                    Back to Connectors
                 </a>
             </div>
         </div>
@@ -310,13 +310,13 @@ document.addEventListener('DOMContentLoaded', function() {
         <div id="connection-status" class="connection-status {{ $mqttbroker->status === 'active' ? 'connected' : ($mqttbroker->status === 'error' ? 'error' : 'disconnected') }}">
             @if($mqttbroker->status === 'active')
                 <i class="ph-check-circle me-2"></i>
-                Broker is currently active and ready to accept connections
+                Connector is currently active and ready to accept connections
             @elseif($mqttbroker->status === 'error')
                 <i class="ph-x-circle me-2"></i>
-                Broker connection error - Please check configuration and test connection
+                Connector connection error - Please check configuration and test connection
             @else
                 <i class="ph-minus-circle me-2"></i>
-                Broker is currently inactive
+                Connector is currently inactive
             @endif
         </div>
 
@@ -595,7 +595,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <i class="ph-cpu ph-3x text-muted"></i>
                             </div>
                             <h6 class="text-muted">No devices connected</h6>
-                            <p class="text-muted">This MQTT broker doesn't have any devices connected to it yet.</p>
+                            <p class="text-muted">This connector doesn't have any devices connected to it yet.</p>
                             <a href="{{ route('app.devices.create') }}" class="btn btn-primary">
                                 <i class="ph-plus-circle me-2"></i>
                                 Add Device

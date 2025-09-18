@@ -134,7 +134,7 @@
                             <i class="ph-broadcast text-info" style="font-size: 1.5rem;"></i>
                         </div>
                         <h4 class="mb-1">{{ $mqttBrokers->count() }}</h4>
-                        <div class="text-muted">MQTT Brokers</div>
+                        <div class="text-muted">Connectors</div>
                     </div>
                 </div>
             </div>
@@ -259,7 +259,7 @@
                                         </div>
                                     </div>
                                     <div class="flex-grow-1 ms-3">
-                                        <div class="fw-medium">MQTT Brokers</div>
+                                        <div class="fw-medium">Connectors</div>
                                         <div class="text-success small">{{ $mqttBrokers->count() }} Active</div>
                                     </div>
                                 </div>
