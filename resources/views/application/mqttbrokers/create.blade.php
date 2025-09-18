@@ -250,7 +250,7 @@ function showNotification(message, type) {
                                     <hr class="my-2">
                                 </div>
                                 
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-12 mb-3">
                                     <label class="form-label">Username</label>
                                     <input type="text" name="username" class="form-control @error('username') is-invalid @enderror" 
                                            placeholder="Enter username" value="{{ old('username') }}">
@@ -259,7 +259,7 @@ function showNotification(message, type) {
                                     @enderror
                                 </div>
 
-                                <div class="col-md-6 mb-3">
+                                <div class="col-md-12 mb-3">
                                     <label class="form-label">Password</label>
                                     <input type="password" name="password" class="form-control @error('password') is-invalid @enderror" 
                                            placeholder="Enter password">
