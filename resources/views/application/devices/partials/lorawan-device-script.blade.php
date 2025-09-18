@@ -450,6 +450,195 @@
         }
     }
 
+    // Distance calculation variables
+    let distanceMarker = null;
+    let distanceLine = null;
+    let isDistanceMode = false;
+
+    // Toggle distance measurement mode
+    function toggleDistanceMode() {
+        const distanceBtn = document.getElementById('distance-btn');
+        
+        if (!isDistanceMode) {
+            // Enable distance mode
+            isDistanceMode = true;
+            if (distanceBtn) {
+                distanceBtn.innerHTML = '<i class="ph-x me-1"></i>Cancel Distance';
+                distanceBtn.classList.remove('btn-outline-info');
+                distanceBtn.classList.add('btn-outline-danger');
+            }
+            
+            // Change cursor and add click handler
+            map.getContainer().style.cursor = 'crosshair';
+            map.on('click', onMapClickForDistance);
+            
+            console.log('📏 Distance measurement mode enabled - click on map to measure distance to device');
+        } else {
+            // Disable distance mode
+            clearDistanceMeasurement();
+        }
+    }
+
+    // Handle map click for distance measurement
+    function onMapClickForDistance(e) {
+        if (!isDistanceMode) return;
+        
+        const clickLat = e.latlng.lat;
+        const clickLng = e.latlng.lng;
+        
+        console.log('📍 Map clicked for distance measurement:', clickLat, clickLng);
+        
+        // Get device coordinates
+        const deviceCoords = getDeviceCoordinates();
+        if (!deviceCoords) {
+            alert('Device location not available for distance measurement');
+            return;
+        }
+        
+        // Calculate distance
+        const distance = calculateDistance(clickLat, clickLng, deviceCoords.lat, deviceCoords.lng);
+        
+        // Clear previous measurement
+        if (distanceMarker) map.removeLayer(distanceMarker);
+        if (distanceLine) map.removeLayer(distanceLine);
+        
+        // Add marker at clicked point
+        distanceMarker = L.marker([clickLat, clickLng], {
+            icon: L.divIcon({
+                html: `<div style="background-color: #f59e0b; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                        <i class="ph-ruler" style="color: white; font-size: 12px;"></i>
+                    </div>`,
+                className: 'distance-marker',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            })
+        }).addTo(map);
+        
+        // Add line between points
+        distanceLine = L.polyline([
+            [clickLat, clickLng],
+            [deviceCoords.lat, deviceCoords.lng]
+        ], {
+            color: '#f59e0b',
+            weight: 3,
+            opacity: 0.8,
+            dashArray: '10, 10'
+        }).addTo(map);
+        
+        // Create popup with distance info
+        const distanceText = formatDistance(distance);
+        distanceMarker.bindPopup(`
+            <div class="text-center p-2">
+                <h6 class="mb-1"><i class="ph-ruler me-2"></i>Distance Measurement</h6>
+                <div class="fw-bold text-primary" style="font-size: 1.2em;">${distanceText}</div>
+                <small class="text-muted">Distance to ${device.name}</small>
+                <div class="mt-2">
+                    <button class="btn btn-sm btn-outline-danger" onclick="clearDistanceMeasurement()">
+                        <i class="ph-x me-1"></i>Clear
+                    </button>
+                </div>
+            </div>
+        `).openPopup();
+        
+        console.log(`📏 Distance calculated: ${distanceText}`);
+    }
+
+    // Get device coordinates from various sources
+    function getDeviceCoordinates() {
+        // Try sensor data first
+        const latSensor = previousSensors.find(s => s.sensor_type === 'latitude');
+        const lngSensor = previousSensors.find(s => s.sensor_type === 'longitude');
+        
+        if (latSensor && lngSensor && latSensor.value !== null && lngSensor.value !== null) {
+            const lat = parseFloat(latSensor.value);
+            const lng = parseFloat(lngSensor.value);
+            if (!isNaN(lat) && !isNaN(lng)) {
+                return { lat, lng, source: 'sensors' };
+            }
+        }
+        
+        // Fallback to device current_location
+        if (device.current_location && device.current_location.coordinates) {
+            return {
+                lat: device.current_location.coordinates[1],
+                lng: device.current_location.coordinates[0],
+                source: 'current_location'
+            };
+        }
+        
+        // Fallback to device location
+        if (device.location && device.location.coordinates) {
+            return {
+                lat: device.location.coordinates[1],
+                lng: device.location.coordinates[0],
+                source: 'device_location'
+            };
+        }
+        
+        return null;
+    }
+
+    // Calculate distance between two points using Haversine formula
+    function calculateDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371; // Earth's radius in kilometers
+        const dLat = toRadians(lat2 - lat1);
+        const dLng = toRadians(lng2 - lng1);
+        
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                 Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+                 Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = R * c; // Distance in kilometers
+        
+        return distance;
+    }
+
+    // Convert degrees to radians
+    function toRadians(degrees) {
+        return degrees * (Math.PI / 180);
+    }
+
+    // Format distance for display
+    function formatDistance(distanceKm) {
+        if (distanceKm < 1) {
+            return `${Math.round(distanceKm * 1000)} meters`;
+        } else if (distanceKm < 10) {
+            return `${distanceKm.toFixed(2)} km`;
+        } else {
+            return `${Math.round(distanceKm)} km`;
+        }
+    }
+
+    // Clear distance measurement
+    function clearDistanceMeasurement() {
+        isDistanceMode = false;
+        
+        // Reset button
+        const distanceBtn = document.getElementById('distance-btn');
+        if (distanceBtn) {
+            distanceBtn.innerHTML = '<i class="ph-ruler me-1"></i>Measure Distance';
+            distanceBtn.classList.remove('btn-outline-danger');
+            distanceBtn.classList.add('btn-outline-info');
+        }
+        
+        // Reset cursor and remove click handler
+        map.getContainer().style.cursor = '';
+        map.off('click', onMapClickForDistance);
+        
+        // Remove distance markers and line
+        if (distanceMarker) {
+            map.removeLayer(distanceMarker);
+            distanceMarker = null;
+        }
+        if (distanceLine) {
+            map.removeLayer(distanceLine);
+            distanceLine = null;
+        }
+        
+        console.log('📏 Distance measurement cleared');
+    }
+
     // Locate device function - centers map on device location
     function locateDevice() {
         console.log('🎯 Locate device button clicked');

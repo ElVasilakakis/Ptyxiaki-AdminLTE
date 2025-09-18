@@ -70,9 +70,14 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h6 class="fw-semibold mb-0">Device Location</h6>
-                <button type="button" class="btn btn-outline-primary btn-sm" id="locate-device-btn" onclick="locateDevice()" title="Center map on device location">
-                    <i class="ph-crosshairs me-1"></i>Locate Device
-                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-info btn-sm" id="distance-btn" onclick="toggleDistanceMode()" title="Click on map to measure distance to device">
+                        <i class="ph-ruler me-1"></i>Measure Distance
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="locate-device-btn" onclick="locateDevice()" title="Center map on device location">
+                        <i class="ph-crosshairs me-1"></i>Locate Device
+                    </button>
+                </div>
             </div>
             <div id="map"></div>
         </div>
