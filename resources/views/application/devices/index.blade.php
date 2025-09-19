@@ -32,10 +32,10 @@ function toggleDeviceStatus(deviceId, isActive) {
     const switchElement = document.getElementById(`device_switch_${deviceId}`);
     const labelElement = switchElement.nextElementSibling;
     const originalText = labelElement.textContent;
-    
+
     labelElement.textContent = 'Updating...';
     switchElement.disabled = true;
-    
+
     // Make AJAX request to update device status
     fetch(`/app/devices/${deviceId}/toggle-status`, {
         method: 'PATCH',
@@ -52,7 +52,7 @@ function toggleDeviceStatus(deviceId, isActive) {
         if (data.success) {
             // Update label text
             labelElement.textContent = isActive ? 'Active' : 'Inactive';
-            
+
             // Show success notification
             showNotification('Device status updated successfully!', 'success');
         } else {
@@ -77,11 +77,11 @@ function toggleDeviceStatus(deviceId, isActive) {
 function updateDeviceStatus(deviceId, status) {
     const button = event.target.closest('button');
     const originalContent = button.innerHTML;
-    
+
     // Show loading state
     button.innerHTML = '<i class="ph-spinner ph-spin"></i>';
     button.disabled = true;
-    
+
     // Make AJAX request to update device status
     fetch(`/app/devices/${deviceId}/update-status`, {
         method: 'PATCH',
@@ -97,14 +97,14 @@ function updateDeviceStatus(deviceId, status) {
     .then(data => {
         if (data.success) {
             showNotification(`Device status updated to ${status}!`, 'success');
-            
+
             // Update the status badge in the table
             const statusBadge = document.querySelector(`#device_status_${deviceId}`);
             if (statusBadge) {
                 statusBadge.className = `badge bg-${getStatusColor(status)} bg-opacity-10 text-${getStatusColor(status)}`;
                 statusBadge.textContent = status.charAt(0).toUpperCase() + status.slice(1);
             }
-            
+
             // Temporarily change button to success state
             button.innerHTML = '<i class="ph-check"></i>';
             setTimeout(() => {
@@ -144,10 +144,10 @@ function showNotification(message, type) {
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    
+
     // Add to page
     document.body.appendChild(notification);
-    
+
     // Auto remove after 5 seconds
     setTimeout(() => {
         if (notification.parentNode) {
@@ -234,19 +234,16 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <td>
                                         <div class="text-body fw-semibold">{{ $device->mqttBroker->name }}</div>
                                         <div class="text-muted fs-sm">
-                                            <i class="ph-globe me-1"></i>
-                                            {{ $device->mqttBroker->host }}:{{ $device->mqttBroker->port }}
+                                            <i class="ph-webhook me-1"></i>
+                                            Webhook Connector
                                         </div>
                                         <div class="text-muted fs-sm">
                                             <i class="ph-map-pin me-1"></i>
                                             {{ $device->land->land_name }}
                                         </div>
-                                        @if($device->topics && count($device->topics) > 0)
-                                            <div class="text-muted fs-sm mt-1">
-                                                <i class="ph-chat-circle me-1"></i>
-                                                {{ count($device->topics) }} topic(s)
-                                            </div>
-                                        @endif
+                                        <div class="text-muted fs-sm mt-1">
+                                            <span class="badge bg-success bg-opacity-10 text-success">{{ ucfirst($device->protocol) }}</span>
+                                        </div>
                                     </td>
                                     <td>
                                         <div class="mb-2">
@@ -264,8 +261,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                             </span>
                                         </div>
                                         <div class="form-check form-switch">
-                                            <input class="form-check-input" type="checkbox" 
-                                                   {{ $device->is_active ? 'checked' : '' }} 
+                                            <input class="form-check-input" type="checkbox"
+                                                   {{ $device->is_active ? 'checked' : '' }}
                                                    onchange="toggleDeviceStatus({{ $device->id }}, this.checked)"
                                                    id="device_switch_{{ $device->id }}">
                                             <label class="form-check-label text-muted fs-sm" for="device_switch_{{ $device->id }}">
@@ -274,17 +271,17 @@ document.addEventListener('DOMContentLoaded', function() {
                                         </div>
                                         <div class="mt-2">
                                             <div class="btn-group btn-group-sm">
-                                                <button type="button" class="btn btn-outline-success btn-sm" 
+                                                <button type="button" class="btn btn-outline-success btn-sm"
                                                         onclick="updateDeviceStatus({{ $device->id }}, 'online')"
                                                         title="Set Online" data-bs-toggle="tooltip">
                                                     <i class="ph-check-circle"></i>
                                                 </button>
-                                                <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                                <button type="button" class="btn btn-outline-secondary btn-sm"
                                                         onclick="updateDeviceStatus({{ $device->id }}, 'offline')"
                                                         title="Set Offline" data-bs-toggle="tooltip">
                                                     <i class="ph-x-circle"></i>
                                                 </button>
-                                                <button type="button" class="btn btn-outline-warning btn-sm" 
+                                                <button type="button" class="btn btn-outline-warning btn-sm"
                                                         onclick="updateDeviceStatus({{ $device->id }}, 'maintenance')"
                                                         title="Set Maintenance" data-bs-toggle="tooltip">
                                                     <i class="ph-wrench"></i>
@@ -322,26 +319,26 @@ document.addEventListener('DOMContentLoaded', function() {
                                     </td>
                                     <td class="text-center">
                                         <div class="d-inline-flex gap-1">
-                                            <a href="{{ route('app.devices.show', $device) }}" 
-                                               class="btn btn-sm btn-outline-primary btn-icon rounded-pill" 
+                                            <a href="{{ route('app.devices.show', $device) }}"
+                                               class="btn btn-sm btn-outline-primary btn-icon rounded-pill"
                                                title="View Details"
                                                data-bs-toggle="tooltip">
                                                 <i class="ph-eye"></i>
                                             </a>
-                                            <a href="{{ route('app.devices.edit', $device) }}" 
-                                               class="btn btn-sm btn-outline-warning btn-icon rounded-pill" 
+                                            <a href="{{ route('app.devices.edit', $device) }}"
+                                               class="btn btn-sm btn-outline-warning btn-icon rounded-pill"
                                                title="Edit Device"
                                                data-bs-toggle="tooltip">
                                                 <i class="ph-pencil"></i>
                                             </a>
-                                            <form action="{{ route('app.devices.destroy', $device) }}" 
-                                                  method="POST" 
+                                            <form action="{{ route('app.devices.destroy', $device) }}"
+                                                  method="POST"
                                                   class="d-inline"
                                                   onsubmit="return confirm('Are you sure you want to delete this device? This action cannot be undone and will affect all connected sensors.')">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit" 
-                                                        class="btn btn-sm btn-outline-danger btn-icon rounded-pill" 
+                                                <button type="submit"
+                                                        class="btn btn-sm btn-outline-danger btn-icon rounded-pill"
                                                         title="Delete Device"
                                                         data-bs-toggle="tooltip">
                                                     <i class="ph-trash"></i>

@@ -5,12 +5,19 @@ namespace App\Http\Controllers\Application;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\MqttBroker;
-use App\Services\MqttConnectionTester;
+use App\Services\WebhookMqttBridge;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class MQTTBrokersController extends Controller
 {
+    private WebhookMqttBridge $webhookBridge;
+
+    public function __construct(WebhookMqttBridge $webhookBridge)
+    {
+        $this->webhookBridge = $webhookBridge;
+    }
+
     public function index()
     {
         $mqttBrokers = MqttBroker::forUser(Auth::id())->latest()->get();
@@ -26,19 +33,7 @@ class MQTTBrokersController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'type' => 'required|in:emqx,mosquitto,lorawan',
-            'host' => 'required|string|max:255',
-            'port' => 'required|integer|min:1|max:65535',
-            'websocket_port' => 'nullable|integer|min:1|max:65535',
-            'path' => 'nullable|string|max:255',
-            'username' => 'nullable|string|max:255',
-            'password' => 'nullable|string|max:255',
-            'use_ssl' => 'boolean',
-            'ssl_port' => 'nullable|integer|min:1|max:65535',
-            'keepalive' => 'required|integer|min:1|max:3600',
-            'timeout' => 'required|integer|min:1|max:300',
-            'auto_reconnect' => 'boolean',
-            'max_reconnect_attempts' => 'required|integer|min:1|max:100',
+            'type' => 'required|in:webhook,lorawan',
             'description' => 'nullable|string|max:1000',
         ]);
 
@@ -51,24 +46,13 @@ class MQTTBrokersController extends Controller
         MqttBroker::create([
             'name' => $request->name,
             'type' => $request->type,
-            'host' => $request->host,
-            'port' => $request->port,
-            'websocket_port' => $request->websocket_port,
-            'path' => $request->path,
-            'username' => $request->username,
-            'password' => $request->password,
-            'use_ssl' => $request->has('use_ssl'),
-            'ssl_port' => $request->ssl_port,
-            'keepalive' => $request->keepalive,
-            'timeout' => $request->timeout,
-            'auto_reconnect' => $request->has('auto_reconnect'),
-            'max_reconnect_attempts' => $request->max_reconnect_attempts,
             'description' => $request->description,
+            'status' => 'active',
             'user_id' => Auth::id(),
         ]);
 
         return redirect()->route('app.mqttbrokers.index')
-            ->with('success', 'MQTT Broker created successfully!');
+            ->with('success', 'Webhook Connector created successfully!');
     }
 
     public function show(MqttBroker $mqttbroker)
@@ -79,7 +63,14 @@ class MQTTBrokersController extends Controller
         }
 
         $mqttbroker->load('devices');
-        return view('application.mqttbrokers.show', compact('mqttbroker'));
+
+        // Get webhook instructions for all devices
+        $webhookInstructions = [];
+        foreach ($mqttbroker->devices as $device) {
+            $webhookInstructions[$device->device_id] = $this->webhookBridge->getWebhookInstructions($device);
+        }
+
+        return view('application.mqttbrokers.show', compact('mqttbroker', 'webhookInstructions'));
     }
 
     public function edit(MqttBroker $mqttbroker)
@@ -101,19 +92,7 @@ class MQTTBrokersController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'type' => 'required|in:emqx,mosquitto,lorawan',
-            'host' => 'required|string|max:255',
-            'port' => 'required|integer|min:1|max:65535',
-            'websocket_port' => 'nullable|integer|min:1|max:65535',
-            'path' => 'nullable|string|max:255',
-            'username' => 'nullable|string|max:255',
-            'password' => 'nullable|string|max:255',
-            'use_ssl' => 'boolean',
-            'ssl_port' => 'nullable|integer|min:1|max:65535',
-            'keepalive' => 'required|integer|min:1|max:3600',
-            'timeout' => 'required|integer|min:1|max:300',
-            'auto_reconnect' => 'boolean',
-            'max_reconnect_attempts' => 'required|integer|min:1|max:100',
+            'type' => 'required|in:webhook,lorawan',
             'description' => 'nullable|string|max:1000',
         ]);
 
@@ -126,23 +105,11 @@ class MQTTBrokersController extends Controller
         $mqttbroker->update([
             'name' => $request->name,
             'type' => $request->type,
-            'host' => $request->host,
-            'port' => $request->port,
-            'websocket_port' => $request->websocket_port,
-            'path' => $request->path,
-            'username' => $request->username,
-            'password' => $request->password,
-            'use_ssl' => $request->has('use_ssl'),
-            'ssl_port' => $request->ssl_port,
-            'keepalive' => $request->keepalive,
-            'timeout' => $request->timeout,
-            'auto_reconnect' => $request->has('auto_reconnect'),
-            'max_reconnect_attempts' => $request->max_reconnect_attempts,
             'description' => $request->description,
         ]);
 
         return redirect()->route('app.mqttbrokers.index')
-            ->with('success', 'MQTT Broker updated successfully!');
+            ->with('success', 'Webhook Connector updated successfully!');
     }
 
     public function destroy(MqttBroker $mqttbroker)
@@ -155,7 +122,7 @@ class MQTTBrokersController extends Controller
         $mqttbroker->delete();
 
         return redirect()->route('app.mqttbrokers.index')
-            ->with('success', 'MQTT Broker deleted successfully!');
+            ->with('success', 'Webhook Connector deleted successfully!');
     }
 
     public function toggleStatus(Request $request, MqttBroker $mqttbroker)
@@ -180,74 +147,63 @@ class MQTTBrokersController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Broker status updated successfully',
+                'message' => 'Connector status updated successfully',
                 'status' => $mqttbroker->status
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update broker status'
+                'message' => 'Failed to update connector status'
             ], 500);
         }
     }
 
-    public function testConnection(Request $request, MqttBroker $mqttbroker, MqttConnectionTester $tester)
+    /**
+     * Get webhook instructions for a specific device
+     */
+    public function getWebhookInstructions(Request $request, MqttBroker $mqttbroker, $deviceId)
     {
-        // Ensure user can only test their own brokers
+        // Ensure user can only access their own brokers
         if ($mqttbroker->user_id !== Auth::id()) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         try {
-            $connectionResult = $tester->testConnectionWithFallbacks($mqttbroker);
+            $device = $mqttbroker->devices()->where('device_id', $deviceId)->first();
+
+            if (!$device) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Device not found'
+                ], 404);
+            }
+
+            $instructions = $this->webhookBridge->getWebhookInstructions($device);
 
             return response()->json([
-                'success' => $connectionResult['success'],
-                'message' => $connectionResult['message'],
-                'details' => $connectionResult['details'] ?? null
+                'success' => true,
+                'device_id' => $deviceId,
+                'instructions' => $instructions
             ]);
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Connection test failed: ' . $e->getMessage()
+                'message' => 'Failed to get webhook instructions: ' . $e->getMessage()
             ], 500);
         }
     }
 
-
-    public function testConnectionFromForm(Request $request, MqttConnectionTester $tester)
+    /**
+     * Test webhook functionality
+     */
+    public function testWebhook(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'host' => 'required|string|max:255',
-            'port' => 'required|integer|min:1|max:65535',
-            'use_ssl' => 'boolean',
-            'ssl_port' => 'nullable|integer|min:1|max:65535',
-            'username' => 'nullable|string|max:255',
-            'password' => 'nullable|string|max:255',
-            'timeout' => 'nullable|integer|min:1|max:300',
+        return response()->json([
+            'success' => true,
+            'message' => 'Webhook system is working correctly',
+            'timestamp' => now()->toISOString(),
+            'data_received' => $request->all()
         ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid connection parameters'
-            ], 400);
-        }
-
-        try {
-            $connectionResult = $tester->testConnectionFromData($request->all());
-
-            return response()->json([
-                'success' => $connectionResult['success'],
-                'message' => $connectionResult['message'],
-                'details' => $connectionResult['details'] ?? null
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Connection test failed: ' . $e->getMessage()
-            ], 500);
-        }
     }
 }

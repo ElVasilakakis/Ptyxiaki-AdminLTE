@@ -49,7 +49,7 @@
             </table>
         </div>
 
-        <div class="col-md-6">
+        {{-- <div class="col-md-6">
             <h6 class="fw-semibold mb-3">MQTT Topics</h6>
             @if ($device->topics && count($device->topics) > 0)
                 <ul class="list-group list-group-flush">
@@ -62,7 +62,7 @@
             @else
                 <p class="text-muted">No topics configured</p>
             @endif
-        </div>
+        </div> --}}
     </div>
 
     <!-- Map -->

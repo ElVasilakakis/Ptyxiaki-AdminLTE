@@ -15,18 +15,13 @@ class Device extends Model
         'device_id',
         'name',
         'device_type',
-        'mqtt_broker_id',
+        'mqtt_broker_id', // Keep this for relationship with webhook connectors
         'land_id',
         'user_id',
         'status',
         'last_seen_at',
         'installed_at',
-        'topics',
         'protocol',
-        'mqtt_port',
-        'mqtts_port',
-        'ws_port',
-        'wss_port',
         'configuration',
         'description',
         'is_active',
@@ -35,13 +30,13 @@ class Device extends Model
     protected $casts = [
         'last_seen_at' => 'datetime',
         'installed_at' => 'datetime',
-        'topics' => 'array',
         'configuration' => 'array',
         'is_active' => 'boolean',
     ];
 
     protected $attributes = [
         'device_type' => 'sensor',
+        'protocol' => 'webhook',
         'status' => 'offline',
         'is_active' => true,
     ];

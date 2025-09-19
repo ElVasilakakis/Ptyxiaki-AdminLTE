@@ -2,7 +2,7 @@
     <h6 class="mb-0">Device: {{ $device->name }}</h6>
     <div class="d-flex align-items-center gap-2">
         <div id="location-status" class="location-status unknown">Location Status Unknown</div>
-        <div class="badge bg-info">LoRaWAN Device</div>
+        <div class="badge bg-success">Webhook Device</div>
     </div>
 </div>
 
@@ -39,7 +39,13 @@
                     </td>
                 </tr>
                 <tr>
-                    <td><strong>Network Server:</strong></td>
+                    <td><strong>Protocol:</strong></td>
+                    <td>
+                        <span class="badge bg-success bg-opacity-10 text-success">{{ ucfirst($device->protocol) }}</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Connector:</strong></td>
                     <td>{{ $device->mqttBroker->name }}</td>
                 </tr>
                 <tr>
@@ -50,31 +56,27 @@
         </div>
 
         <div class="col-md-6">
-            <h6 class="fw-semibold mb-3">LoRaWAN Configuration</h6>
-            <table class="table table-sm">
-                <tr>
-                    <td><strong>Network Server:</strong></td>
-                    <td>{{ $device->mqttBroker->host }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Data Rate:</strong></td>
-                    <td>Auto</td>
-                </tr>
-                <tr>
-                    <td><strong>Last Uplink:</strong></td>
-                    <td>{{ $device->last_seen_at ? $device->last_seen_at->diffForHumans() : 'Never' }}</td>
-                </tr>
-                {{-- @if ($device->topics && count($device->topics) > 0)
-                    <tr>
-                        <td><strong>Topics:</strong></td>
-                        <td>
-                            @foreach ($device->topics as $topic)
-                                <code class="d-block">{{ $topic }}</code>
-                            @endforeach
-                        </td>
-                    </tr>
-                @endif --}}
-            </table>
+            <h6 class="fw-semibold mb-3">Webhook Configuration</h6>
+            <div class="alert alert-info">
+                <h6 class="fw-semibold mb-2">
+                    <i class="ph-webhook me-2"></i>Webhook URL
+                </h6>
+                <p class="mb-2">Send sensor data to this endpoint:</p>
+                <div class="bg-dark text-light p-2 rounded mb-2">
+                    <code class="text-light">{{ url('/api/webhook/mqtt/' . $device->device_id . '?token=***') }}</code>
+                </div>
+                <small class="text-muted">
+                    <i class="ph-info me-1"></i>
+                    Use HTTP POST with JSON data. Token is automatically generated for security.
+                </small>
+            </div>
+
+            <div class="mt-3">
+                <a href="{{ route('app.mqttbrokers.getWebhookInstructions', [$device->mqttBroker, $device->device_id]) }}"
+                   class="btn btn-outline-primary btn-sm">
+                    <i class="ph-code me-1"></i>Get Full Instructions
+                </a>
+            </div>
         </div>
     </div>
 
@@ -139,10 +141,7 @@
     <!-- Sensor Data Table -->
     <div class="row mb-4">
         <div class="col-12">
-            <h6 class="fw-semibold mb-3">
-                LoRaWAN Sensor Data
-                <small class="text-muted">(Auto-refreshes every 30 seconds)</small>
-            </h6>
+            <h6 class="fw-semibold mb-3">Live Sensor Data</h6>
             <div class="sensor-table">
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
@@ -228,7 +227,7 @@
                                         </td>
                                         <td class="sensor-status">
                                             <span class="sensor-status-indicator {{ $sensor->hasRecentReading() ? 'sensor-status-online' : 'sensor-status-offline' }}"></span>
-                                            <span class="status-text">{{ $sensor->hasRecentReading() ? 'Online' : 'Offline' }}</span>
+                                            {{ $sensor->hasRecentReading() ? 'Online' : 'Offline' }}
                                         </td>
                                         <td class="sensor-alert">
                                             <span class="alert-badge {{ $alertClass }}">{{ $alertText }}</span>
@@ -239,8 +238,8 @@
                             @else
                                 <tr id="no-sensors-row">
                                     <td colspan="6" class="text-center text-muted py-4">
-                                        <i class="ph-broadcast me-2"></i>
-                                        Waiting for LoRaWAN uplink data...
+                                        <i class="ph-webhook me-2"></i>
+                                        Send data to webhook to see live sensor readings
                                     </td>
                                 </tr>
                             @endif
