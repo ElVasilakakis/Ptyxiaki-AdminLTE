@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Application;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\MqttBroker;
+use App\Services\MqttConnectionTester;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
@@ -190,7 +191,7 @@ class MQTTBrokersController extends Controller
         }
     }
 
-    public function testConnection(Request $request, MqttBroker $mqttbroker)
+    public function testConnection(Request $request, MqttBroker $mqttbroker, MqttConnectionTester $tester)
     {
         // Ensure user can only test their own brokers
         if ($mqttbroker->user_id !== Auth::id()) {
@@ -198,31 +199,13 @@ class MQTTBrokersController extends Controller
         }
 
         try {
-            // Simulate MQTT connection test
-            $connectionResult = $this->performMqttConnectionTest($mqttbroker);
-            
-            if ($connectionResult['success']) {
-                // Update last connected timestamp
-                $mqttbroker->update([
-                    'last_connected_at' => now(),
-                    'status' => 'active'
-                ]);
+            $connectionResult = $tester->testConnectionWithFallbacks($mqttbroker);
 
-                return response()->json([
-                    'success' => true,
-                    'message' => $connectionResult['message']
-                ]);
-            } else {
-                // Update status to error if connection failed
-                $mqttbroker->update([
-                    'status' => 'error'
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => $connectionResult['message']
-                ]);
-            }
+            return response()->json([
+                'success' => $connectionResult['success'],
+                'message' => $connectionResult['message'],
+                'details' => $connectionResult['details'] ?? null
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -231,59 +214,8 @@ class MQTTBrokersController extends Controller
         }
     }
 
-    private function performMqttConnectionTest(MqttBroker $broker)
-    {
-        $connection = null;
-        try {
-            // Basic connection validation
-            $host = $broker->host;
-            $port = $broker->use_ssl ? ($broker->ssl_port ?? 8883) : $broker->port;
-            $timeout = $broker->timeout ?? 10;
 
-            // Test if host is reachable
-            $connection = @fsockopen($host, $port, $errno, $errstr, $timeout);
-            
-            if (!$connection) {
-                return [
-                    'success' => false,
-                    'message' => "Cannot connect to {$host}:{$port} - {$errstr} ({$errno})"
-                ];
-            }
-
-            // Set socket timeout for read/write operations
-            stream_set_timeout($connection, $timeout);
-            
-            // Send a simple test to verify the connection is working
-            // For MQTT, we can send a basic ping or just verify the socket is writable
-            $testWrite = @fwrite($connection, "\x00");
-            
-            if ($testWrite === false) {
-                return [
-                    'success' => false,
-                    'message' => "Connection established but socket is not writable"
-                ];
-            }
-
-            // If we reach here, basic connection is successful
-            return [
-                'success' => true,
-                'message' => "Successfully connected to {$host}:{$port} - Socket test passed"
-            ];
-
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'message' => "Connection test failed: " . $e->getMessage()
-            ];
-        } finally {
-            // Always ensure the connection is properly closed
-            if ($connection && is_resource($connection)) {
-                @fclose($connection);
-            }
-        }
-    }
-
-    public function testConnectionFromForm(Request $request)
+    public function testConnectionFromForm(Request $request, MqttConnectionTester $tester)
     {
         $validator = Validator::make($request->all(), [
             'host' => 'required|string|max:255',
@@ -303,22 +235,12 @@ class MQTTBrokersController extends Controller
         }
 
         try {
-            // Create a temporary broker object for testing
-            $tempBroker = new MqttBroker([
-                'host' => $request->host,
-                'port' => $request->port,
-                'use_ssl' => $request->use_ssl ?? false,
-                'ssl_port' => $request->ssl_port,
-                'username' => $request->username,
-                'password' => $request->password,
-                'timeout' => $request->timeout ?? 30,
-            ]);
+            $connectionResult = $tester->testConnectionFromData($request->all());
 
-            $connectionResult = $this->performMqttConnectionTest($tempBroker);
-            
             return response()->json([
                 'success' => $connectionResult['success'],
-                'message' => $connectionResult['message']
+                'message' => $connectionResult['message'],
+                'details' => $connectionResult['details'] ?? null
             ]);
 
         } catch (\Exception $e) {
