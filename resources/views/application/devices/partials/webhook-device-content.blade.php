@@ -70,13 +70,13 @@
                     Use HTTP POST with JSON data. Token is automatically generated for security.
                 </small>
             </div>
-
+{{-- 
             <div class="mt-3">
                 <a href="{{ route('app.mqttbrokers.getWebhookInstructions', [$device->mqttBroker, $device->device_id]) }}"
                    class="btn btn-outline-primary btn-sm">
                     <i class="ph-code me-1"></i>Get Full Instructions
                 </a>
-            </div>
+            </div> --}}
         </div>
     </div>
 
