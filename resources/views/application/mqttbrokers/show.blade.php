@@ -16,8 +16,8 @@
 
         <div class="collapse d-lg-block my-lg-auto ms-lg-auto" id="page_header">
             <div class="hstack gap-3 mb-3 mb-lg-0">
-                <button onclick="testBrokerConnection({{ $mqttbroker->id }})" 
-                        class="btn btn-success" 
+                <button onclick="testBrokerConnection({{ $mqttbroker->id }})"
+                        class="btn btn-success"
                         id="test-connection-btn">
                     <i class="ph-plug me-2"></i>
                     Test Connection
@@ -171,11 +171,11 @@
 function testBrokerConnection(brokerId) {
     const button = document.getElementById('test-connection-btn');
     const originalContent = button.innerHTML;
-    
+
     // Show loading state
     button.innerHTML = '<i class="ph-spinner ph-spin me-2"></i>Testing...';
     button.disabled = true;
-    
+
     // Make AJAX request to test connection
     fetch(`/app/mqttbrokers/${brokerId}/test-connection`, {
         method: 'POST',
@@ -188,15 +188,15 @@ function testBrokerConnection(brokerId) {
     .then(data => {
         if (data.success) {
             showNotification(`Connection test successful! ${data.message}`, 'success');
-            
+
             // Update connection status display
             updateConnectionStatus('connected', data.message);
-            
+
             // Temporarily change button to success state
             button.innerHTML = '<i class="ph-check me-2"></i>Connection Successful';
             button.classList.remove('btn-success');
             button.classList.add('btn-outline-success');
-            
+
             setTimeout(() => {
                 button.innerHTML = originalContent;
                 button.classList.remove('btn-outline-success');
@@ -204,15 +204,15 @@ function testBrokerConnection(brokerId) {
             }, 3000);
         } else {
             showNotification(`Connection test failed: ${data.message}`, 'error');
-            
+
             // Update connection status display
             updateConnectionStatus('error', data.message);
-            
+
             // Temporarily change button to error state
             button.innerHTML = '<i class="ph-x me-2"></i>Connection Failed';
             button.classList.remove('btn-success');
             button.classList.add('btn-danger');
-            
+
             setTimeout(() => {
                 button.innerHTML = originalContent;
                 button.classList.remove('btn-danger');
@@ -223,12 +223,12 @@ function testBrokerConnection(brokerId) {
     .catch(error => {
         console.error('Error:', error);
         showNotification('Connection test failed due to network error.', 'error');
-        
+
         // Reset button state
         button.innerHTML = '<i class="ph-x me-2"></i>Network Error';
         button.classList.remove('btn-success');
         button.classList.add('btn-danger');
-        
+
         setTimeout(() => {
             button.innerHTML = originalContent;
             button.classList.remove('btn-danger');
@@ -244,10 +244,10 @@ function updateConnectionStatus(status, message) {
     const statusElement = document.getElementById('connection-status');
     if (statusElement) {
         statusElement.className = `connection-status ${status}`;
-        
+
         let icon = '';
         let text = '';
-        
+
         switch(status) {
             case 'connected':
                 icon = '<i class="ph-check-circle me-2"></i>';
@@ -261,7 +261,7 @@ function updateConnectionStatus(status, message) {
                 icon = '<i class="ph-minus-circle me-2"></i>';
                 text = 'Disconnected';
         }
-        
+
         statusElement.innerHTML = icon + text;
     }
 }
@@ -275,10 +275,10 @@ function showNotification(message, type) {
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    
+
     // Add to page
     document.body.appendChild(notification);
-    
+
     // Auto remove after 5 seconds
     setTimeout(() => {
         if (notification.parentNode) {
@@ -325,21 +325,21 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="col-lg-6 mb-4">
                 <div class="info-card">
                     <h6><i class="ph-info me-2"></i>Basic Information</h6>
-                    
+
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-tag me-2"></i>Name
                         </span>
                         <span class="info-value">{{ $mqttbroker->name }}</span>
                     </div>
-                    
+
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-cpu me-2"></i>Type
                         </span>
                         <span class="badge-custom bg-info bg-opacity-10 text-info">{{ strtoupper($mqttbroker->type) }}</span>
                     </div>
-                    
+
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-circle me-2"></i>Status
@@ -351,7 +351,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             </span>
                         </span>
                     </div>
-                    
+
                     @if($mqttbroker->description)
                     <div class="info-item">
                         <span class="info-label">
@@ -360,14 +360,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span class="info-value">{{ $mqttbroker->description }}</span>
                     </div>
                     @endif
-                    
+
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-calendar me-2"></i>Created
                         </span>
                         <span class="info-value">{{ $mqttbroker->created_at->format('M d, Y H:i') }}</span>
                     </div>
-                    
+
                     @if($mqttbroker->last_connected_at)
                     <div class="info-item">
                         <span class="info-label">
@@ -383,21 +383,21 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="col-lg-6 mb-4">
                 <div class="info-card">
                     <h6><i class="ph-globe me-2"></i>Connection Details</h6>
-                    
+
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-globe-hemisphere-west me-2"></i>Host
                         </span>
                         <span class="info-value">{{ $mqttbroker->host }}</span>
                     </div>
-                    
+
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-plug me-2"></i>Port
                         </span>
                         <span class="info-value">{{ $mqttbroker->port }}</span>
                     </div>
-                    
+
                     @if($mqttbroker->websocket_port)
                     <div class="info-item">
                         <span class="info-label">
@@ -406,7 +406,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span class="info-value">{{ $mqttbroker->websocket_port }}</span>
                     </div>
                     @endif
-                    
+
                     @if($mqttbroker->path)
                     <div class="info-item">
                         <span class="info-label">
@@ -415,21 +415,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span class="info-value">{{ $mqttbroker->path }}</span>
                     </div>
                     @endif
-                    
-                    <div class="info-item">
+
+                    {{-- <div class="info-item">
                         <span class="info-label">
                             <i class="ph-link me-2"></i>Endpoint
                         </span>
                         <div class="endpoint-code">{{ $mqttbroker->getEndpoint() }}</div>
                     </div>
-                    
+                     --}}
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-timer me-2"></i>Keep Alive
                         </span>
                         <span class="info-value">{{ $mqttbroker->keepalive }}s</span>
                     </div>
-                    
+
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-clock me-2"></i>Timeout
@@ -443,7 +443,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="col-lg-6 mb-4">
                 <div class="info-card">
                     <h6><i class="ph-shield me-2"></i>Security Settings</h6>
-                    
+
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-lock me-2"></i>SSL/TLS
@@ -461,7 +461,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             @endif
                         </span>
                     </div>
-                    
+
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-user me-2"></i>Authentication
@@ -477,7 +477,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             @endif
                         </span>
                     </div>
-                    
+
                     @if($mqttbroker->client_id)
                     <div class="info-item">
                         <span class="info-label">
@@ -493,7 +493,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="col-lg-6 mb-4">
                 <div class="info-card">
                     <h6><i class="ph-gear me-2"></i>Advanced Settings</h6>
-                    
+
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-arrow-clockwise me-2"></i>Auto Reconnect
@@ -508,14 +508,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             @endif
                         </span>
                     </div>
-                    
+
                     <div class="info-item">
                         <span class="info-label">
                             <i class="ph-repeat me-2"></i>Max Reconnect Attempts
                         </span>
                         <span class="info-value">{{ $mqttbroker->max_reconnect_attempts }}</span>
                     </div>
-                    
+
                     @if($mqttbroker->certificates)
                     <div class="info-item">
                         <span class="info-label">
@@ -524,7 +524,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span class="badge-custom bg-info bg-opacity-10 text-info">Configured</span>
                     </div>
                     @endif
-                    
+
                     @if($mqttbroker->additional_config)
                     <div class="info-item">
                         <span class="info-label">
@@ -547,7 +547,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             Connected Devices ({{ $mqttbroker->devices->count() }})
                         </h6>
                     </div>
-                    
+
                     @if($mqttbroker->devices->count() > 0)
                         <div class="card-body">
                             <div class="row">
@@ -560,25 +560,25 @@ document.addEventListener('DOMContentLoaded', function() {
                                                     {{ ucfirst($device->status) }}
                                                 </span>
                                             </div>
-                                            
+
                                             <div class="text-muted mb-2">
                                                 <i class="ph-identification-card me-1"></i>
                                                 {{ $device->device_id }}
                                             </div>
-                                            
+
                                             @if($device->land)
                                                 <div class="text-muted mb-2">
                                                     <i class="ph-map-pin me-1"></i>
                                                     {{ $device->land->name }}
                                                 </div>
                                             @endif
-                                            
+
                                             <div class="d-flex justify-content-between align-items-center">
                                                 <small class="text-muted">
                                                     <i class="ph-calendar me-1"></i>
                                                     {{ $device->created_at->format('M d, Y') }}
                                                 </small>
-                                                <a href="{{ route('app.devices.show', $device) }}" 
+                                                <a href="{{ route('app.devices.show', $device) }}"
                                                    class="btn btn-sm btn-outline-primary">
                                                     <i class="ph-eye me-1"></i>
                                                     View
