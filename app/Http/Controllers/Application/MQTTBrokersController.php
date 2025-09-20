@@ -33,21 +33,8 @@ class MQTTBrokersController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'type' => 'required|in:webhook,lorawan,emqx,mosquitto',
+            'type' => 'required|in:webhook,lorawan',
             'description' => 'nullable|string|max:1000',
-            'host' => 'nullable|string|max:255',
-            'port' => 'nullable|integer|min:1|max:65535',
-            'websocket_port' => 'nullable|integer|min:1|max:65535',
-            'path' => 'nullable|string|max:255',
-            'username' => 'nullable|string|max:255',
-            'password' => 'nullable|string|max:255',
-            'use_ssl' => 'nullable|boolean',
-            'ssl_port' => 'nullable|integer|min:1|max:65535',
-            'client_id' => 'nullable|string|max:255',
-            'keepalive' => 'nullable|integer|min:1|max:3600',
-            'timeout' => 'nullable|integer|min:1|max:300',
-            'auto_reconnect' => 'nullable|boolean',
-            'max_reconnect_attempts' => 'nullable|integer|min:1|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -57,9 +44,7 @@ class MQTTBrokersController extends Controller
         }
 
         $data = $request->only([
-            'name', 'type', 'description', 'host', 'port', 'websocket_port', 'path',
-            'username', 'password', 'use_ssl', 'ssl_port', 'client_id', 'keepalive',
-            'timeout', 'auto_reconnect', 'max_reconnect_attempts'
+            'name', 'type', 'description'
         ]);
 
         $data['status'] = 'active';
@@ -108,21 +93,8 @@ class MQTTBrokersController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'type' => 'required|in:webhook,lorawan,emqx,mosquitto',
+            'type' => 'required|in:webhook,lorawan',
             'description' => 'nullable|string|max:1000',
-            'host' => 'nullable|string|max:255',
-            'port' => 'nullable|integer|min:1|max:65535',
-            'websocket_port' => 'nullable|integer|min:1|max:65535',
-            'path' => 'nullable|string|max:255',
-            'username' => 'nullable|string|max:255',
-            'password' => 'nullable|string|max:255',
-            'use_ssl' => 'nullable|boolean',
-            'ssl_port' => 'nullable|integer|min:1|max:65535',
-            'client_id' => 'nullable|string|max:255',
-            'keepalive' => 'nullable|integer|min:1|max:3600',
-            'timeout' => 'nullable|integer|min:1|max:300',
-            'auto_reconnect' => 'nullable|boolean',
-            'max_reconnect_attempts' => 'nullable|integer|min:1|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -132,15 +104,8 @@ class MQTTBrokersController extends Controller
         }
 
         $data = $request->only([
-            'name', 'type', 'description', 'host', 'port', 'websocket_port', 'path',
-            'username', 'use_ssl', 'ssl_port', 'client_id', 'keepalive',
-            'timeout', 'auto_reconnect', 'max_reconnect_attempts'
+            'name', 'type', 'description'
         ]);
-
-        // Only update password if provided
-        if ($request->filled('password')) {
-            $data['password'] = $request->password;
-        }
 
         $mqttbroker->update($data);
 
@@ -277,51 +242,4 @@ class MQTTBrokersController extends Controller
         }
     }
 
-    /**
-     * Test connection from form data
-     */
-    public function testConnectionFromForm(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'host' => 'required|string|max:255',
-            'port' => 'required|integer|min:1|max:65535',
-            'use_ssl' => 'nullable|boolean',
-            'ssl_port' => 'nullable|integer|min:1|max:65535',
-            'username' => 'nullable|string|max:255',
-            'password' => 'nullable|string|max:255',
-            'timeout' => 'nullable|integer|min:1|max:300',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid connection parameters'
-            ], 400);
-        }
-
-        try {
-            // Basic validation of connection parameters
-            $host = $request->input('host');
-            $port = $request->input('port');
-
-            // Simple connectivity check (you could enhance this with actual MQTT connection testing)
-            if (empty($host) || $port < 1 || $port > 65535) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid host or port configuration'
-                ]);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Connection parameters validated successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Connection test failed: ' . $e->getMessage()
-            ], 500);
-        }
-    }
 }
