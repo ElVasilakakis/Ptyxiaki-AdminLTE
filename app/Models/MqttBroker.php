@@ -18,10 +18,37 @@ class MqttBroker extends Model
         'description',
         'status',
         'user_id',
+        'host',
+        'port',
+        'websocket_port',
+        'path',
+        'username',
+        'password',
+        'use_ssl',
+        'ssl_port',
+        'client_id',
+        'keepalive',
+        'timeout',
+        'certificates',
+        'additional_config',
+        'last_connected_at',
+        'connection_error',
+        'auto_reconnect',
+        'max_reconnect_attempts',
     ];
 
     protected $casts = [
-        // No MQTT-specific casts needed for webhook-only functionality
+        'use_ssl' => 'boolean',
+        'auto_reconnect' => 'boolean',
+        'port' => 'integer',
+        'websocket_port' => 'integer',
+        'ssl_port' => 'integer',
+        'keepalive' => 'integer',
+        'timeout' => 'integer',
+        'max_reconnect_attempts' => 'integer',
+        'certificates' => 'array',
+        'additional_config' => 'array',
+        'last_connected_at' => 'datetime',
     ];
 
     protected $attributes = [
@@ -75,6 +102,33 @@ class MqttBroker extends Model
     public function isConnected(): bool
     {
         return $this->status === 'active';
+    }
+
+    /**
+     * Get the broker endpoint URL.
+     */
+    public function getEndpoint(): string
+    {
+        $protocol = $this->use_ssl ? 'mqtts' : 'mqtt';
+        $port = $this->use_ssl && $this->ssl_port ? $this->ssl_port : $this->port;
+
+        return "{$protocol}://{$this->host}:{$port}";
+    }
+
+    /**
+     * Get the connection port based on SSL settings.
+     */
+    public function getConnectionPort(): int
+    {
+        return $this->use_ssl && $this->ssl_port ? $this->ssl_port : $this->port;
+    }
+
+    /**
+     * Check if the broker uses SSL.
+     */
+    public function usesSsl(): bool
+    {
+        return (bool) $this->use_ssl;
     }
 
 }

@@ -6,17 +6,10 @@
 function handleBrokerTypeChange() {
     const brokerType = document.querySelector('select[name="type"]').value;
     const authSection = document.getElementById('authentication-section');
-    
-    if (brokerType === 'lorawan') {
-        // Hide authentication section for webhook
-        authSection.style.display = 'none';
-        // Clear authentication fields when hidden
-        document.querySelector('input[name="username"]').value = '';
-        document.querySelector('input[name="password"]').value = '';
-    } else {
-        // Show authentication section for MQTT brokers
-        authSection.style.display = 'block';
-    }
+
+    // Show authentication section for all broker types
+    // Credentials may be needed for LoRaWAN, MQTT, and other broker types
+    authSection.style.display = 'block';
 }
 
 // Initialize on page load
@@ -32,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function testConnectionFromForm() {
     const button = event.target;
     const originalContent = button.innerHTML;
-    
+
     // Get form values
     const host = document.querySelector('input[name="host"]').value;
     const port = document.querySelector('input[name="port"]').value;
@@ -41,17 +34,17 @@ function testConnectionFromForm() {
     const username = document.querySelector('input[name="username"]').value;
     const password = document.querySelector('input[name="password"]').value;
     const timeout = document.querySelector('input[name="timeout"]').value;
-    
+
     // Validate required fields
     if (!host || !port) {
         showNotification('Please fill in the Host and Port fields before testing connection.', 'error');
         return;
     }
-    
+
     // Show loading state
     button.innerHTML = '<i class="ph-spinner ph-spin me-2"></i>Testing...';
     button.disabled = true;
-    
+
     // Prepare test data
     const testData = {
         host: host,
@@ -62,7 +55,7 @@ function testConnectionFromForm() {
         password: password || null,
         timeout: timeout ? parseInt(timeout) : 30
     };
-    
+
     // Make AJAX request to test connection
     fetch('/app/mqttbrokers/test-connection-form', {
         method: 'POST',
@@ -76,12 +69,12 @@ function testConnectionFromForm() {
     .then(data => {
         if (data.success) {
             showNotification(`Connection test successful! ${data.message}`, 'success');
-            
+
             // Temporarily change button to success state
             button.innerHTML = '<i class="ph-check me-2"></i>Connection Successful';
             button.classList.remove('btn-outline-success');
             button.classList.add('btn-success');
-            
+
             setTimeout(() => {
                 button.innerHTML = originalContent;
                 button.classList.remove('btn-success');
@@ -89,12 +82,12 @@ function testConnectionFromForm() {
             }, 3000);
         } else {
             showNotification(`Connection test failed: ${data.message}`, 'error');
-            
+
             // Temporarily change button to error state
             button.innerHTML = '<i class="ph-x me-2"></i>Connection Failed';
             button.classList.remove('btn-outline-success');
             button.classList.add('btn-danger');
-            
+
             setTimeout(() => {
                 button.innerHTML = originalContent;
                 button.classList.remove('btn-danger');
@@ -105,12 +98,12 @@ function testConnectionFromForm() {
     .catch(error => {
         console.error('Error:', error);
         showNotification('Connection test failed due to network error.', 'error');
-        
+
         // Reset button state
         button.innerHTML = '<i class="ph-x me-2"></i>Test Failed';
         button.classList.remove('btn-outline-success');
         button.classList.add('btn-danger');
-        
+
         setTimeout(() => {
             button.innerHTML = originalContent;
             button.classList.remove('btn-danger');
@@ -131,10 +124,10 @@ function showNotification(message, type) {
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    
+
     // Add to page
     document.body.appendChild(notification);
-    
+
     // Auto remove after 5 seconds
     setTimeout(() => {
         if (notification.parentNode) {
@@ -168,17 +161,17 @@ function showNotification(message, type) {
                         <form action="{{ route('app.mqttbrokers.update', $mqttbroker) }}" method="POST">
                             @csrf
                             @method('PUT')
-                            
+
                             <!-- Basic Information -->
                             <div class="row mb-4">
                                 <div class="col-12">
                                     <h6 class="fw-semibold">Basic Information</h6>
                                     <hr class="my-2">
                                 </div>
-                                
+
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Broker Name <span class="text-danger">*</span></label>
-                                    <input type="text" name="name" class="form-control @error('name') is-invalid @enderror" 
+                                    <input type="text" name="name" class="form-control @error('name') is-invalid @enderror"
                                            placeholder="Enter broker name" value="{{ old('name', $mqttbroker->name) }}" required>
                                     @error('name')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -204,10 +197,10 @@ function showNotification(message, type) {
                                     <h6 class="fw-semibold">Connection Settings</h6>
                                     <hr class="my-2">
                                 </div>
-                                
+
                                 <div class="col-md-8 mb-3">
                                     <label class="form-label">Host <span class="text-danger">*</span></label>
-                                    <input type="text" name="host" class="form-control @error('host') is-invalid @enderror" 
+                                    <input type="text" name="host" class="form-control @error('host') is-invalid @enderror"
                                            placeholder="broker.example.com" value="{{ old('host', $mqttbroker->host) }}" required>
                                     @error('host')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -216,7 +209,7 @@ function showNotification(message, type) {
 
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">Port <span class="text-danger">*</span></label>
-                                    <input type="number" name="port" class="form-control @error('port') is-invalid @enderror" 
+                                    <input type="number" name="port" class="form-control @error('port') is-invalid @enderror"
                                            placeholder="1883" value="{{ old('port', $mqttbroker->port) }}" min="1" max="65535" required>
                                     @error('port')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -225,7 +218,7 @@ function showNotification(message, type) {
 
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">WebSocket Port</label>
-                                    <input type="number" name="websocket_port" class="form-control @error('websocket_port') is-invalid @enderror" 
+                                    <input type="number" name="websocket_port" class="form-control @error('websocket_port') is-invalid @enderror"
                                            placeholder="8083" value="{{ old('websocket_port', $mqttbroker->websocket_port) }}" min="1" max="65535">
                                     @error('websocket_port')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -234,7 +227,7 @@ function showNotification(message, type) {
 
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Path</label>
-                                    <input type="text" name="path" class="form-control @error('path') is-invalid @enderror" 
+                                    <input type="text" name="path" class="form-control @error('path') is-invalid @enderror"
                                            placeholder="/mqtt" value="{{ old('path', $mqttbroker->path ?? '/mqtt') }}">
                                     <small class="form-text text-muted">WebSocket path (e.g., /mqtt)</small>
                                     @error('path')
@@ -249,10 +242,10 @@ function showNotification(message, type) {
                                     <h6 class="fw-semibold">Authentication</h6>
                                     <hr class="my-2">
                                 </div>
-                                
+
                                 <div class="col-md-12 mb-3">
                                     <label class="form-label">Username</label>
-                                    <input type="text" name="username" class="form-control @error('username') is-invalid @enderror" 
+                                    <input type="text" name="username" class="form-control @error('username') is-invalid @enderror"
                                            placeholder="Enter username" value="{{ old('username', $mqttbroker->username) }}">
                                     @error('username')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -261,7 +254,7 @@ function showNotification(message, type) {
 
                                 <div class="col-md-12 mb-3">
                                     <label class="form-label">Password</label>
-                                    <input type="password" name="password" class="form-control @error('password') is-invalid @enderror" 
+                                    <input type="password" name="password" class="form-control @error('password') is-invalid @enderror"
                                            placeholder="Leave empty to keep current password">
                                     <small class="form-text text-muted">Leave empty to keep the current password</small>
                                     @error('password')
@@ -276,10 +269,10 @@ function showNotification(message, type) {
                                     <h6 class="fw-semibold">SSL Settings</h6>
                                     <hr class="my-2">
                                 </div>
-                                
+
                                 <div class="col-md-6 mb-3">
                                     <div class="form-check">
-                                        <input type="checkbox" name="use_ssl" class="form-check-input" 
+                                        <input type="checkbox" name="use_ssl" class="form-check-input"
                                                {{ old('use_ssl', $mqttbroker->use_ssl) ? 'checked' : '' }} value="1" id="use_ssl">
                                         <label class="form-check-label" for="use_ssl">
                                             Use SSL/TLS
@@ -289,7 +282,7 @@ function showNotification(message, type) {
 
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">SSL Port</label>
-                                    <input type="number" name="ssl_port" class="form-control @error('ssl_port') is-invalid @enderror" 
+                                    <input type="number" name="ssl_port" class="form-control @error('ssl_port') is-invalid @enderror"
                                            placeholder="8883" value="{{ old('ssl_port', $mqttbroker->ssl_port) }}" min="1" max="65535">
                                     @error('ssl_port')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -303,10 +296,10 @@ function showNotification(message, type) {
                                     <h6 class="fw-semibold">Connection Options</h6>
                                     <hr class="my-2">
                                 </div>
-                                
+
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">Keep Alive (seconds) <span class="text-danger">*</span></label>
-                                    <input type="number" name="keepalive" class="form-control @error('keepalive') is-invalid @enderror" 
+                                    <input type="number" name="keepalive" class="form-control @error('keepalive') is-invalid @enderror"
                                            placeholder="60" value="{{ old('keepalive', $mqttbroker->keepalive) }}" min="1" max="3600" required>
                                     @error('keepalive')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -315,7 +308,7 @@ function showNotification(message, type) {
 
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">Timeout (seconds) <span class="text-danger">*</span></label>
-                                    <input type="number" name="timeout" class="form-control @error('timeout') is-invalid @enderror" 
+                                    <input type="number" name="timeout" class="form-control @error('timeout') is-invalid @enderror"
                                            placeholder="30" value="{{ old('timeout', $mqttbroker->timeout) }}" min="1" max="300" required>
                                     @error('timeout')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -324,7 +317,7 @@ function showNotification(message, type) {
 
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">Max Reconnect Attempts <span class="text-danger">*</span></label>
-                                    <input type="number" name="max_reconnect_attempts" class="form-control @error('max_reconnect_attempts') is-invalid @enderror" 
+                                    <input type="number" name="max_reconnect_attempts" class="form-control @error('max_reconnect_attempts') is-invalid @enderror"
                                            placeholder="5" value="{{ old('max_reconnect_attempts', $mqttbroker->max_reconnect_attempts) }}" min="1" max="100" required>
                                     @error('max_reconnect_attempts')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -333,7 +326,7 @@ function showNotification(message, type) {
 
                                 <div class="col-12 mb-3">
                                     <div class="form-check">
-                                        <input type="checkbox" name="auto_reconnect" class="form-check-input" 
+                                        <input type="checkbox" name="auto_reconnect" class="form-check-input"
                                                {{ old('auto_reconnect', $mqttbroker->auto_reconnect) ? 'checked' : '' }} value="1" id="auto_reconnect">
                                         <label class="form-check-label" for="auto_reconnect">
                                             Auto Reconnect
@@ -346,7 +339,7 @@ function showNotification(message, type) {
                             <div class="row mb-4">
                                 <div class="col-12">
                                     <label class="form-label">Description</label>
-                                    <textarea name="description" class="form-control @error('description') is-invalid @enderror" 
+                                    <textarea name="description" class="form-control @error('description') is-invalid @enderror"
                                               rows="3" placeholder="Enter broker description">{{ old('description', $mqttbroker->description) }}</textarea>
                                     @error('description')
                                         <div class="invalid-feedback">{{ $message }}</div>
