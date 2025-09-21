@@ -57,14 +57,6 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the MQTT brokers for the user.
-     */
-    public function mqttBrokers(): HasMany
-    {
-        return $this->hasMany(MqttBroker::class);
-    }
-
-    /**
      * Get the devices for the user.
      */
     public function devices(): HasMany
@@ -88,13 +80,6 @@ class User extends Authenticatable
         return $this->lands()->enabled();
     }
 
-    /**
-     * Get the active MQTT brokers for the user.
-     */
-    public function activeMqttBrokers(): HasMany
-    {
-        return $this->mqttBrokers()->active();
-    }
 
     /**
      * Get the active devices for the user.

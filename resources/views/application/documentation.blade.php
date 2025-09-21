@@ -241,9 +241,6 @@
                                     <a href="{{ route('app.lorawan-guide') }}" class="btn btn-sm btn-outline-primary">
                                         <i class="ph-broadcast me-1"></i>LoRaWAN Guide
                                     </a>
-                                    <a href="{{ route('app.mqtt-guide') }}" class="btn btn-sm btn-outline-success">
-                                        <i class="ph-wifi-high me-1"></i>MQTT Guide
-                                    </a>
                                 </div>
                             </div>
                         </div>
@@ -309,9 +306,7 @@
                                     <a href="{{ route('app.lorawan-guide') }}" class="btn btn-outline-primary">
                                         <i class="ph-broadcast me-1"></i>LoRaWAN Setup
                                     </a>
-                                    <a href="{{ route('app.mqtt-guide') }}" class="btn btn-outline-success">
-                                        <i class="ph-wifi-high me-1"></i>MQTT Setup
-                                    </a>
+
                                     <a href="{{ route('app.dashboard') }}" class="btn btn-outline-info">
                                         <i class="ph-house me-1"></i>View Dashboard
                                     </a>

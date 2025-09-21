@@ -6,7 +6,6 @@ use App\Http\Controllers\Application\DashboardController;
 use App\Http\Controllers\Application\LandsController;
 use App\Http\Controllers\Application\DevicesController;
 use App\Http\Controllers\Application\SensorsController;
-use App\Http\Controllers\Application\MQTTBrokersController;
 use App\Http\Controllers\LoRaWANController;
 
 Route::get('/debug/lorawan-check', [LoRaWANController::class, 'debugConnection']);
@@ -50,10 +49,6 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
         return view('application.lorawan-guide');
     })->name('app.lorawan-guide');
     
-    // MQTT Guide Route
-    Route::get('/mqtt-guide', function () {
-        return view('application.mqtt-guide');
-    })->name('app.mqtt-guide');
 
     Route::group(['prefix' => 'lands'], function () {
         Route::get('/', [LandsController::class, 'index'])->name('app.lands.index');
@@ -93,18 +88,6 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
         Route::post('/store', [SensorsController::class, 'store'])->name('app.sensors.store');
     });
 
-    Route::group(['prefix' => 'mqttbrokers'], function () {
-        Route::get('/', [MQTTBrokersController::class, 'index'])->name('app.mqttbrokers.index');
-        Route::get('/create', [MQTTBrokersController::class, 'create'])->name('app.mqttbrokers.create');
-        Route::post('/', [MQTTBrokersController::class, 'store'])->name('app.mqttbrokers.store');
-        Route::post('/test-connection-form', [MQTTBrokersController::class, 'testConnectionFromForm'])->name('app.mqttbrokers.test-connection-form');
-        Route::get('/{mqttbroker}', [MQTTBrokersController::class, 'show'])->name('app.mqttbrokers.show');
-        Route::get('/{mqttbroker}/edit', [MQTTBrokersController::class, 'edit'])->name('app.mqttbrokers.edit');
-        Route::put('/{mqttbroker}', [MQTTBrokersController::class, 'update'])->name('app.mqttbrokers.update');
-        Route::patch('/{mqttbroker}/toggle-status', [MQTTBrokersController::class, 'toggleStatus'])->name('app.mqttbrokers.toggle-status');
-        Route::post('/{mqttbroker}/test-connection', [MQTTBrokersController::class, 'testConnection'])->name('app.mqttbrokers.test-connection');
-        Route::delete('/{mqttbroker}', [MQTTBrokersController::class, 'destroy'])->name('app.mqttbrokers.destroy');
-    });
 });
 
 // Catch all undefined routes and redirect to login for guests, dashboard for authenticated users

@@ -64,13 +64,6 @@
                     <div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Network</div>
                     <i class="ph-dots-three sidebar-resize-show"></i>
                 </li>
-                <li class="nav-item">
-                    <a href="{{ route('app.mqttbrokers.index') }}" class="nav-link {{ request()->routeIs('app.mqttbrokers.*') ? 'active' : '' }}">
-                        <i class="ph-computer-tower"></i>
-                        <span>Connectors</span>
-                    </a>
-                </li>
-
                 <li class="nav-item-header">
                     <div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Documentation</div>
                     <i class="ph-dots-three sidebar-resize-show"></i>
@@ -85,12 +78,6 @@
                     <a href="{{route('app.lorawan-guide')}}" class="nav-link {{ request()->routeIs('app.lorawan-guide') ? 'active' : '' }}">
                         <i class="ph-broadcast"></i>
                         <span>How to The Things Stack LoRaWAN</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{{route('app.mqtt-guide')}}" class="nav-link {{ request()->routeIs('app.mqtt-guide') ? 'active' : '' }}">
-                        <i class="ph-wifi-high"></i>
-                        <span>How to MQTT</span>
                     </a>
                 </li>
 

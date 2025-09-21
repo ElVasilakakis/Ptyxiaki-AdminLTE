@@ -232,17 +232,25 @@ document.addEventListener('DOMContentLoaded', function() {
                                         </div>
                                     </td>
                                     <td>
-                                        <div class="text-body fw-semibold">{{ $device->mqttBroker->name }}</div>
+                                        <div class="text-body fw-semibold">{{ ucfirst($device->connection_type) }} Connection</div>
                                         <div class="text-muted fs-sm">
-                                            <i class="ph-webhook me-1"></i>
-                                            Webhook Connector
+                                            @if($device->connection_type === 'webhook')
+                                                <i class="ph-webhook me-1"></i>
+                                                Webhook Protocol
+                                            @else
+                                                <i class="ph-broadcast me-1"></i>
+                                                MQTT Protocol
+                                            @endif
                                         </div>
                                         <div class="text-muted fs-sm">
                                             <i class="ph-map-pin me-1"></i>
                                             {{ $device->land->land_name }}
                                         </div>
                                         <div class="text-muted fs-sm mt-1">
-                                            <span class="badge bg-success bg-opacity-10 text-success">{{ ucfirst($device->protocol) }}</span>
+                                            <span class="badge bg-success bg-opacity-10 text-success">{{ ucfirst($device->connection_type) }}</span>
+                                            @if($device->connection_broker)
+                                                <span class="badge bg-info bg-opacity-10 text-info ms-1">{{ ucfirst(str_replace('_', ' ', $device->connection_broker)) }}</span>
+                                            @endif
                                         </div>
                                     </td>
                                     <td>

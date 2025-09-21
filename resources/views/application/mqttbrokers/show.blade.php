@@ -26,10 +26,6 @@
                     <i class="ph-pencil me-2"></i>
                     Edit
                 </a>
-                <a href="{{ route('app.mqttbrokers.index') }}" class="btn btn-outline-primary">
-                    <i class="ph-arrow-left me-2"></i>
-                    Back to Connectors
-                </a>
             </div>
         </div>
     </div>

@@ -21,7 +21,6 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->string('status')->default('offline');
 
-            // Connection/Broker fields (integrated from MqttBroker)
             $table->enum('connection_type', ['mqtt', 'webhook'])->default('webhook');
             $table->string('client_id')->nullable();
             $table->boolean('use_ssl')->default(false);

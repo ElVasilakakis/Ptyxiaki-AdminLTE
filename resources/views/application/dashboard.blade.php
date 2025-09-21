@@ -127,17 +127,6 @@
                 </div>
             </div>
 
-            <div class="col-lg-3 col-md-6">
-                <div class="card">
-                    <div class="card-body text-center">
-                        <div class="d-inline-flex align-items-center justify-content-center w-60px h-60px bg-light rounded-circle mb-3">
-                            <i class="ph-broadcast text-info" style="font-size: 1.5rem;"></i>
-                        </div>
-                        <h4 class="mb-1">{{ $mqttBrokers->count() }}</h4>
-                        <div class="text-muted">Connectors</div>
-                    </div>
-                </div>
-            </div>
 
             <div class="col-lg-3 col-md-6">
                 <div class="card">
@@ -248,19 +237,6 @@
                                     <div class="flex-grow-1 ms-3">
                                         <div class="fw-medium">Database</div>
                                         <div class="text-success small">Connected</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="d-flex align-items-center">
-                                    <div class="flex-shrink-0">
-                                        <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                                            <i class="ph-broadcast"></i>
-                                        </div>
-                                    </div>
-                                    <div class="flex-grow-1 ms-3">
-                                        <div class="fw-medium">Connectors</div>
-                                        <div class="text-success small">{{ $mqttBrokers->count() }} Active</div>
                                     </div>
                                 </div>
                             </div>

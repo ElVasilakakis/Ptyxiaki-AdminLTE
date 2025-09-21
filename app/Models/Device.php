@@ -15,30 +15,40 @@ class Device extends Model
         'device_id',
         'name',
         'device_type',
-        'mqtt_broker_id', // Keep this for relationship with webhook connectors
         'land_id',
         'user_id',
         'status',
-        'last_seen_at',
-        'installed_at',
-        'protocol',
-        'configuration',
         'description',
         'is_active',
+        'connection_type',
+        'client_id',
+        'use_ssl',
+        'connection_broker',
+        'port',
+        'username',
+        'password',
+        'auto_reconnect',
+        'max_reconnect_attempts',
+        'keepalive',
+        'timeout',
     ];
 
     protected $casts = [
-        'last_seen_at' => 'datetime',
-        'installed_at' => 'datetime',
-        'configuration' => 'array',
         'is_active' => 'boolean',
+        'use_ssl' => 'boolean',
+        'auto_reconnect' => 'boolean',
     ];
 
     protected $attributes = [
         'device_type' => 'sensor',
-        'protocol' => 'webhook',
+        'connection_type' => 'webhook',
         'status' => 'offline',
         'is_active' => true,
+        'use_ssl' => false,
+        'auto_reconnect' => true,
+        'max_reconnect_attempts' => 3,
+        'keepalive' => 60,
+        'timeout' => 30,
     ];
 
     /**
@@ -49,13 +59,6 @@ class Device extends Model
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Get the MQTT broker for the device.
-     */
-    public function mqttBroker(): BelongsTo
-    {
-        return $this->belongsTo(MqttBroker::class);
-    }
 
     /**
      * Get the land that the device belongs to.

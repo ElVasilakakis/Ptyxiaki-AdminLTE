@@ -23,66 +23,25 @@ function showNotification(message, type) {
     }, 5000);
 }
 
-// Topics Repeater Functionality
-let topicIndex = {{ $device->topics && is_array($device->topics) ? count($device->topics) : 1 }};
-
-function addTopicField() {
-    const repeater = document.getElementById('topics-repeater');
-    const newItem = document.createElement('div');
-    newItem.className = 'repeater-item mb-3';
-    newItem.style.cssText = 'border: 1px solid #ddd; border-radius: 0.375rem; background-color: #f8f9fa; padding: 1rem;';
+// Toggle connection fields based on connection type
+function toggleConnectionFields() {
+    const connectionType = document.querySelector('select[name="connection_type"]').value;
+    const mqttFields = document.getElementById('mqtt-connection-fields');
     
-    newItem.innerHTML = `
-        <div class="d-flex gap-3 align-items-center">
-            <div class="flex-fill">
-                <input type="text" name="topics[${topicIndex}]" class="form-control" placeholder="Enter MQTT topic (e.g., sensors/temperature)">
-            </div>
-            <div style="min-width: 100px;">
-                <button type="button" class="btn btn-danger btn-sm remove-topic">
-                    <i class="ph-trash"></i> Remove
-                </button>
-            </div>
-        </div>
-    `;
-    
-    repeater.appendChild(newItem);
-    topicIndex++;
-    
-    // Add event listener to the new remove button
-    newItem.querySelector('.remove-topic').addEventListener('click', function() {
-        removeTopicField(this);
-    });
-}
-
-function removeTopicField(button) {
-    const repeaterItems = document.querySelectorAll('.repeater-item');
-    if (repeaterItems.length > 1) {
-        button.closest('.repeater-item').remove();
-        reindexTopics();
+    if (connectionType === 'mqtt') {
+        mqttFields.style.display = 'block';
     } else {
-        showNotification('At least one topic is required', 'error');
+        mqttFields.style.display = 'none';
     }
-}
-
-function reindexTopics() {
-    const topicInputs = document.querySelectorAll('input[name^="topics["]');
-    topicInputs.forEach((input, index) => {
-        input.name = `topics[${index}]`;
-    });
-    topicIndex = topicInputs.length;
 }
 
 // Initialize form interactions
 document.addEventListener('DOMContentLoaded', function() {
-    // Add topic button
-    document.getElementById('add-topic').addEventListener('click', addTopicField);
+    // Toggle connection fields when connection type changes
+    document.querySelector('select[name="connection_type"]').addEventListener('change', toggleConnectionFields);
     
-    // Remove topic buttons
-    document.querySelectorAll('.remove-topic').forEach(button => {
-        button.addEventListener('click', function() {
-            removeTopicField(this);
-        });
-    });
+    // Initialize connection fields visibility
+    toggleConnectionFields();
 });
 </script>
 @endsection
@@ -131,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <label class="form-label">Device ID <span class="text-danger">*</span></label>
                                     <input type="text" name="device_id" class="form-control @error('device_id') is-invalid @enderror" 
                                            placeholder="Unique device identifier" value="{{ old('device_id', $device->device_id) }}" required>
-                                    <small class="form-text text-muted">Unique identifier for MQTT communication</small>
+                                    <small class="form-text text-muted">Unique identifier for device communication</small>
                                     @error('device_id')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
@@ -163,31 +122,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
-                            </div>
-
-                            <!-- Connection Settings -->
-                            <div class="row mb-4">
-                                <div class="col-12">
-                                    <h6 class="fw-semibold">Connection Settings</h6>
-                                    <hr class="my-2">
-                                </div>
-                                
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Connector <span class="text-danger">*</span></label>
-                                    <select name="mqtt_broker_id" class="form-select @error('mqtt_broker_id') is-invalid @enderror" required>
-                                        <option value="">Select Connector</option>
-                                        @foreach($mqttBrokers as $broker)
-                                            <option value="{{ $broker->id }}" {{ old('mqtt_broker_id', $device->mqtt_broker_id) == $broker->id ? 'selected' : '' }}>
-                                                {{ $broker->name }} ({{ $broker->host }}:{{ $broker->port }})
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                    @error('mqtt_broker_id')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-
-                            </div>
 
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Land <span class="text-danger">*</span></label>
@@ -204,66 +138,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                     @enderror
                                 </div>
 
-                                <!-- MQTT Topics (Repeater) -->
-                                <div class="col-12 mb-3">
-                                    <label class="form-label">MQTT Topics</label>
-                                    <div class="repeater" id="topics-repeater">
-                                        @if($device->topics && is_array($device->topics) && count($device->topics) > 0)
-                                            @foreach($device->topics as $index => $topic)
-                                                <div class="repeater-item mb-3" style="border: 1px solid #ddd; border-radius: 0.375rem; background-color: #f8f9fa; padding: 1rem;">
-                                                    <div class="d-flex gap-3 align-items-center">
-                                                        <div class="flex-fill">
-                                                            <input type="text" name="topics[{{ $index }}]" class="form-control" placeholder="Enter MQTT topic (e.g., sensors/temperature)" value="{{ old('topics.'.$index, $topic) }}">
-                                                        </div>
-                                                        <div style="min-width: 100px;">
-                                                            <button type="button" class="btn btn-danger btn-sm remove-topic">
-                                                                <i class="ph-trash"></i> Remove
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            @endforeach
-                                        @else
-                                            <div class="repeater-item mb-3" style="border: 1px solid #ddd; border-radius: 0.375rem; background-color: #f8f9fa; padding: 1rem;">
-                                                <div class="d-flex gap-3 align-items-center">
-                                                    <div class="flex-fill">
-                                                        <input type="text" name="topics[0]" class="form-control" placeholder="Enter MQTT topic (e.g., sensors/temperature)">
-                                                    </div>
-                                                    <div style="min-width: 100px;">
-                                                        <button type="button" class="btn btn-danger btn-sm remove-topic">
-                                                            <i class="ph-trash"></i> Remove
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        @endif
-                                    </div>
-                                    <button type="button" class="btn btn-success btn-sm" id="add-topic">
-                                        <i class="ph-plus"></i> Add Topic
-                                    </button>
-                                    <small class="form-text text-muted d-block mt-2">Add MQTT topics this device subscribes to or publishes on</small>
-                                    @error('topics')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                            </div>
-
-                            <!-- Device Settings -->
-                            <div class="row mb-4">
-                                <div class="col-12">
-                                    <h6 class="fw-semibold">Device Settings</h6>
-                                    <hr class="my-2">
-                                </div>
-                                
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Installation Date</label>
-                                    <input type="date" name="installed_at" class="form-control @error('installed_at') is-invalid @enderror" 
-                                           value="{{ old('installed_at', $device->installed_at ? $device->installed_at->format('Y-m-d') : '') }}">
-                                    @error('installed_at')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-
                                 <div class="col-md-6 mb-3">
                                     <div class="form-check mt-4">
                                         <input type="checkbox" name="is_active" class="form-check-input" 
@@ -271,6 +145,134 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <label class="form-check-label" for="is_active">
                                             Device is Active
                                         </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Connection Settings -->
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <h6 class="fw-semibold">Connection Settings</h6>
+                                    <hr class="my-2">
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Connection Type <span class="text-danger">*</span></label>
+                                    <select name="connection_type" class="form-select @error('connection_type') is-invalid @enderror" required>
+                                        <option value="">Select connection type</option>
+                                        <option value="webhook" {{ old('connection_type', $device->connection_type) == 'webhook' ? 'selected' : '' }}>Webhook</option>
+                                        <option value="mqtt" {{ old('connection_type', $device->connection_type) == 'mqtt' ? 'selected' : '' }}>MQTT</option>
+                                    </select>
+                                    @error('connection_type')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <!-- MQTT Connection Fields -->
+                                <div id="mqtt-connection-fields" style="display: {{ old('connection_type', $device->connection_type) == 'mqtt' ? 'block' : 'none' }};">
+                                    <div class="col-12 mb-3">
+                                        <div class="alert alert-info">
+                                            <i class="ph-info me-2"></i>
+                                            Configure MQTT connection settings for this device.
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Client ID</label>
+                                        <input type="text" name="client_id" class="form-control @error('client_id') is-invalid @enderror" 
+                                               placeholder="MQTT client ID" value="{{ old('client_id', $device->client_id) }}">
+                                        <small class="form-text text-muted">Leave empty to auto-generate</small>
+                                        @error('client_id')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Connection Broker</label>
+                                        <select name="connection_broker" class="form-select @error('connection_broker') is-invalid @enderror">
+                                            <option value="">Select broker type</option>
+                                            <option value="emqx" {{ old('connection_broker', $device->connection_broker) == 'emqx' ? 'selected' : '' }}>EMQX</option>
+                                            <option value="hivemq" {{ old('connection_broker', $device->connection_broker) == 'hivemq' ? 'selected' : '' }}>HiveMQ</option>
+                                            <option value="thethings_stack" {{ old('connection_broker', $device->connection_broker) == 'thethings_stack' ? 'selected' : '' }}>The Things Stack</option>
+                                        </select>
+                                        @error('connection_broker')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Port</label>
+                                        <input type="number" name="port" class="form-control @error('port') is-invalid @enderror" 
+                                               placeholder="1883" value="{{ old('port', $device->port ?: 1883) }}" min="1" max="65535">
+                                        @error('port')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Username</label>
+                                        <input type="text" name="username" class="form-control @error('username') is-invalid @enderror" 
+                                               placeholder="MQTT username" value="{{ old('username', $device->username) }}">
+                                        @error('username')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Password</label>
+                                        <input type="password" name="password" class="form-control @error('password') is-invalid @enderror" 
+                                               placeholder="Leave empty to keep current password">
+                                        <small class="form-text text-muted">Leave empty to keep current password</small>
+                                        @error('password')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <div class="form-check">
+                                            <input type="checkbox" name="use_ssl" class="form-check-input" 
+                                                   {{ old('use_ssl', $device->use_ssl) ? 'checked' : '' }} value="1" id="use_ssl">
+                                            <label class="form-check-label" for="use_ssl">
+                                                Use SSL/TLS
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <div class="form-check">
+                                            <input type="checkbox" name="auto_reconnect" class="form-check-input" 
+                                                   {{ old('auto_reconnect', $device->auto_reconnect) ? 'checked' : '' }} value="1" id="auto_reconnect">
+                                            <label class="form-check-label" for="auto_reconnect">
+                                                Auto Reconnect
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Max Reconnect Attempts</label>
+                                        <input type="number" name="max_reconnect_attempts" class="form-control @error('max_reconnect_attempts') is-invalid @enderror" 
+                                               placeholder="3" value="{{ old('max_reconnect_attempts', $device->max_reconnect_attempts ?: 3) }}" min="1" max="100">
+                                        @error('max_reconnect_attempts')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Keep Alive (seconds)</label>
+                                        <input type="number" name="keepalive" class="form-control @error('keepalive') is-invalid @enderror" 
+                                               placeholder="60" value="{{ old('keepalive', $device->keepalive ?: 60) }}" min="1" max="3600">
+                                        @error('keepalive')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Timeout (seconds)</label>
+                                        <input type="number" name="timeout" class="form-control @error('timeout') is-invalid @enderror" 
+                                               placeholder="30" value="{{ old('timeout', $device->timeout ?: 30) }}" min="1" max="300">
+                                        @error('timeout')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
                                     </div>
                                 </div>
                             </div>
@@ -287,68 +289,16 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </div>
                             </div>
 
-                            <!-- Device Status Information -->
-                            @if($device->last_seen_at || $device->created_at)
-                                <div class="row mb-4">
-                                    <div class="col-12">
-                                        <h6 class="fw-semibold">Device Status Information</h6>
-                                        <hr class="my-2">
-                                    </div>
-                                    
-                                    <div class="col-md-6 mb-3">
-                                        <div class="card bg-light">
-                                            <div class="card-body">
-                                                <h6 class="card-title">Last Seen</h6>
-                                                @if($device->last_seen_at)
-                                                    <p class="card-text">
-                                                        <i class="ph-clock me-2 text-success"></i>
-                                                        {{ $device->last_seen_at->format('M d, Y H:i') }}
-                                                        <small class="text-muted d-block">{{ $device->last_seen_at->diffForHumans() }}</small>
-                                                    </p>
-                                                @else
-                                                    <p class="card-text text-muted">
-                                                        <i class="ph-clock me-2"></i>
-                                                        Never seen
-                                                    </p>
-                                                @endif
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6 mb-3">
-                                        <div class="card bg-light">
-                                            <div class="card-body">
-                                                <h6 class="card-title">Device Created</h6>
-                                                <p class="card-text">
-                                                    <i class="ph-calendar me-2 text-info"></i>
-                                                    {{ $device->created_at->format('M d, Y H:i') }}
-                                                    <small class="text-muted d-block">{{ $device->created_at->diffForHumans() }}</small>
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    @if($device->sensors->count() > 0)
-                                        <div class="col-12 mb-3">
-                                            <div class="card bg-light">
-                                                <div class="card-body">
-                                                    <h6 class="card-title">Connected Sensors</h6>
-                                                    <p class="card-text">
-                                                        <i class="ph-thermometer me-2 text-warning"></i>
-                                                        {{ $device->sensors->count() }} sensor(s) connected to this device
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    @endif
-                                </div>
-                            @endif
-
                             <!-- Footer Actions -->
                             <div class="d-flex justify-content-between align-items-center">
-                                <a href="{{ route('app.devices.index') }}" class="btn btn-outline-secondary">
-                                    <i class="ph-arrow-left me-2"></i>Back to Devices
-                                </a>
+                                <div>
+                                    <a href="{{ route('app.devices.index') }}" class="btn btn-outline-secondary">
+                                        <i class="ph-arrow-left me-2"></i>Back to Devices
+                                    </a>
+                                    <a href="{{ route('app.devices.show', $device) }}" class="btn btn-outline-info ms-2">
+                                        <i class="ph-eye me-2"></i>View Device
+                                    </a>
+                                </div>
                                 <button type="submit" class="btn btn-primary">
                                     Update Device <i class="ph-floppy-disk ms-2"></i>
                                 </button>

@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\Land;
 use App\Models\Device;
 use App\Models\Sensor;
-use App\Models\MqttBroker;
 use Carbon\Carbon;
 
 class DashboardController extends Controller
@@ -27,14 +26,11 @@ class DashboardController extends Controller
             $query->where('user_id', $user->id);
         })->with(['device'])->get();
         
-        $mqttBrokers = MqttBroker::forUser($user->id)->get();
-        
         // Calculate statistics
         $stats = [
             'total_lands' => $lands->count(),
             'total_devices' => $devices->count(),
             'total_sensors' => $sensors->count(),
-            'total_brokers' => $mqttBrokers->count(),
             'online_devices' => $devices->where('status', 'online')->count(),
             'offline_devices' => $devices->where('status', 'offline')->count(),
             'active_lands' => $lands->where('enabled', true)->count(),
@@ -91,8 +87,7 @@ class DashboardController extends Controller
             'stats', 
             'lands', 
             'devices', 
-            'sensors', 
-            'mqttBrokers',
+            'sensors',
             'deviceTypes',
             'sensorTypes',
             'devicesWithGPS',
