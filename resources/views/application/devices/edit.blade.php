@@ -35,10 +35,27 @@ function toggleConnectionFields() {
     }
 }
 
+// Toggle port based on SSL/TLS selection
+function toggleSSLPort() {
+    const sslCheckbox = document.querySelector('input[name="use_ssl"]');
+    const portInput = document.querySelector('input[name="port"]');
+    
+    if (sslCheckbox.checked) {
+        // Use SSL port (8883 for MQTT over SSL)
+        portInput.value = '8883';
+    } else {
+        // Use standard MQTT port
+        portInput.value = '1883';
+    }
+}
+
 // Initialize form interactions
 document.addEventListener('DOMContentLoaded', function() {
     // Toggle connection fields when connection type changes
     document.querySelector('select[name="connection_type"]').addEventListener('change', toggleConnectionFields);
+    
+    // Toggle port when SSL/TLS checkbox changes
+    document.querySelector('input[name="use_ssl"]').addEventListener('change', toggleSSLPort);
     
     // Initialize connection fields visibility
     toggleConnectionFields();
@@ -204,6 +221,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <label class="form-label">Port</label>
                                         <input type="number" name="port" class="form-control @error('port') is-invalid @enderror" 
                                                placeholder="1883" value="{{ old('port', $device->port ?: 1883) }}" min="1" max="65535">
+                                        <small class="form-text text-muted">Port will auto-change: 1883 (standard) / 8883 (SSL)</small>
                                         @error('port')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror

@@ -140,9 +140,123 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    @if($device->mqttBroker->type === 'lorawan')
-        <!-- LoRaWAN Device Script -->
-        @include('application.devices.partials.lorawan-device-script')
+    @if($device->connection_type === 'mqtt')
+        <!-- MQTT Device Script -->
+        <script>
+            // MQTT device functionality
+            let map;
+            let deviceMarker;
+            let distanceMode = false;
+            let distanceMarker;
+            let distanceLine;
+
+            document.addEventListener('DOMContentLoaded', function() {
+                initializeMap();
+                // Refresh sensor data every 10 seconds for MQTT devices
+                setInterval(refreshSensorData, 10000);
+            });
+
+            function initializeMap() {
+                // Initialize map with default location
+                map = L.map('map').setView([38.2466, 21.7346], 10);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+
+                // Add device marker if location data exists
+                @if($device->sensors->whereIn('sensor_type', ['latitude', 'longitude'])->count() >= 2)
+                    @php
+                        $latSensor = $device->sensors->where('sensor_type', 'latitude')->first();
+                        $lngSensor = $device->sensors->where('sensor_type', 'longitude')->first();
+                    @endphp
+                    @if($latSensor && $lngSensor && $latSensor->value && $lngSensor->value)
+                        const deviceLat = {{ $latSensor->value }};
+                        const deviceLng = {{ $lngSensor->value }};
+
+                        deviceMarker = L.marker([deviceLat, deviceLng])
+                            .addTo(map)
+                            .bindPopup('<strong>{{ $device->name }}</strong><br>{{ $device->device_id }}');
+
+                        map.setView([deviceLat, deviceLng], 15);
+                    @endif
+                @endif
+            }
+
+            function locateDevice() {
+                if (deviceMarker) {
+                    map.setView(deviceMarker.getLatLng(), 15);
+                    deviceMarker.openPopup();
+                }
+            }
+
+            function toggleDistanceMode() {
+                distanceMode = !distanceMode;
+                const btn = document.getElementById('distance-btn');
+
+                if (distanceMode) {
+                    btn.classList.add('active');
+                    btn.innerHTML = '<i class="ph-x me-1"></i>Cancel Distance';
+                    map.on('click', measureDistance);
+                } else {
+                    btn.classList.remove('active');
+                    btn.innerHTML = '<i class="ph-ruler me-1"></i>Measure Distance';
+                    map.off('click', measureDistance);
+
+                    if (distanceMarker) {
+                        map.removeLayer(distanceMarker);
+                        distanceMarker = null;
+                    }
+                    if (distanceLine) {
+                        map.removeLayer(distanceLine);
+                        distanceLine = null;
+                    }
+                }
+            }
+
+            function measureDistance(e) {
+                if (!deviceMarker) return;
+
+                const clickedPoint = e.latlng;
+                const devicePoint = deviceMarker.getLatLng();
+                const distance = clickedPoint.distanceTo(devicePoint);
+
+                if (distanceMarker) map.removeLayer(distanceMarker);
+                if (distanceLine) map.removeLayer(distanceLine);
+
+                distanceMarker = L.marker(clickedPoint)
+                    .addTo(map)
+                    .bindPopup(`Distance to device: ${(distance / 1000).toFixed(2)} km`);
+
+                distanceLine = L.polyline([devicePoint, clickedPoint], {color: 'red'})
+                    .addTo(map);
+
+                distanceMarker.openPopup();
+            }
+
+            function refreshSensorData() {
+                // MQTT devices can have more frequent updates
+                fetch(`/api/devices/{{ $device->id }}/sensors`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            updateSensorDisplay(data.sensors);
+                        }
+                    })
+                    .catch(error => console.error('Error refreshing sensor data:', error));
+            }
+
+            function updateSensorDisplay(sensors) {
+                // Update sensor values in the UI
+                sensors.forEach(sensor => {
+                    const element = document.getElementById(`sensor-${sensor.id}`);
+                    if (element) {
+                        element.querySelector('.sensor-value').textContent = sensor.formatted_value;
+                        element.querySelector('.sensor-timestamp').textContent = sensor.time_since_reading;
+                    }
+                });
+            }
+        </script>
     @else
         <!-- Webhook Device Script - No real-time connection needed -->
         <script>
@@ -251,8 +365,8 @@
         <div class="row">
             <div class="col-12">
                 <div class="card">
-                    @if($device->mqttBroker->type === 'lorawan')
-                        @include('application.devices.partials.lorawan-device-content')
+                    @if($device->connection_type === 'mqtt')
+                        @include('application.devices.partials.mqtt-device-content')
                     @else
                         @include('application.devices.partials.webhook-device-content')
                     @endif
