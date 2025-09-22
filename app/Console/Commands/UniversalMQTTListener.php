@@ -61,100 +61,166 @@ class UniversalMQTTListener extends Command
         return 0;
     }
 
-    private function connectToAllBrokers()
-    {
-        $brokerGroups = $this->groupDevicesByBroker();
+private function connectToAllBrokers()
+{
+    $brokerGroups = $this->groupDevicesByBroker();
 
-        foreach ($brokerGroups as $brokerKey => $devices) {
-            $firstDevice = $devices->first();
+    foreach ($brokerGroups as $brokerKey => $devices) {
+        $firstDevice = $devices->first();
+        
+        try {
+            $this->info("🚀 Starting connection process for: {$firstDevice->mqtt_host}");
+            
+            // Log device configuration
+            $this->info("📋 Device Configuration:");
+            $this->info("   - Host: {$firstDevice->mqtt_host}");
+            $this->info("   - Port: " . ($firstDevice->port ?: ($firstDevice->use_ssl ? 8883 : 1883)));
+            $this->info("   - Use SSL: " . ($firstDevice->use_ssl ? 'Yes' : 'No'));
+            $this->info("   - Username: " . ($firstDevice->username ?: 'None'));
+            $this->info("   - Password: " . ($firstDevice->password ? 'Set (length: ' . strlen($firstDevice->password) . ')' : 'None'));
+            $this->info("   - Keep Alive: " . ($firstDevice->keepalive ?: 60));
+            
+            // Create connection settings
+            $this->info("🔧 Creating connection settings...");
+            $connectionSettings = new ConnectionSettings();
+            $connectionSettings->setKeepAliveInterval($firstDevice->keepalive ?: 60);
+            $connectionSettings->setConnectTimeout(15);
+            $connectionSettings->setSocketTimeout(15);
+            $connectionSettings->setUseTls($firstDevice->use_ssl);
+            $this->info("   ✅ Connection settings created");
+            
+            // Set specific settings for The Things Stack
+            if (str_contains($firstDevice->mqtt_host, 'thethings')) {
+                $this->info("🔧 Detected The Things Stack - applying special configuration");
+                $this->info("   - MQTT Protocol: Default (3.1.1)");
+                $this->info("   - QoS: 0 (required by TTS)");
+                
+                // More permissive TLS settings for TTS
+                $connectionSettings->setTlsSelfSignedAllowed(true);
+                $connectionSettings->setTlsVerifyPeer(false);
+                $connectionSettings->setTlsVerifyPeerName(false);
+                
+                // Set shorter timeout specifically for TTS
+                $connectionSettings->setConnectTimeout(5);
+                $connectionSettings->setSocketTimeout(5);
+                
+                $this->info("   - TLS Verification: Disabled (permissive mode)");
+                $this->info("   - TLS Timeout: 5 seconds");
+            }
+
+
+            
+            if ($firstDevice->username) {
+                $this->info("🔐 Setting username: {$firstDevice->username}");
+                $connectionSettings->setUsername($firstDevice->username);
+            }
+            
+            if ($firstDevice->password) {
+                $this->info("🔐 Setting password (hidden)");
+                $connectionSettings->setPassword($firstDevice->password);
+            }
+
+            // Create MQTT client
+            $clientId = 'laravel_universal_' . time() . '_' . substr(md5($brokerKey), 0, 8);
+            $port = $firstDevice->port ?: ($firstDevice->use_ssl ? 8883 : 1883);
+            
+            $this->info("🏗️ Creating MQTT client:");
+            $this->info("   - Host: {$firstDevice->mqtt_host}");
+            $this->info("   - Port: {$port}");
+            $this->info("   - Client ID: {$clientId}");
+            
+            $mqtt = new MqttClient($firstDevice->mqtt_host, $port, $clientId);
+            $this->info("   ✅ MQTT client created");
+            
+            $this->info("⏳ Attempting connection to {$firstDevice->mqtt_host}:{$port} (timeout: 15s)");
+            $this->info("⏳ Starting connection attempt... please wait");
+            
+            $startTime = microtime(true);
             
             try {
-                $this->info("Connecting to broker: {$firstDevice->mqtt_host}");
+                // Add connection progress logging
+                $this->info("🔌 Initiating MQTT connection...");
+                $mqtt->connect($connectionSettings, true);
                 
-                // Create connection settings with SHORT timeouts
-                $connectionSettings = new ConnectionSettings();
-                $connectionSettings->setKeepAliveInterval($firstDevice->keepalive ?: 60);
-                $connectionSettings->setConnectTimeout(5); // Only 5 seconds!
-                $connectionSettings->setSocketTimeout(5);  // Only 5 seconds!
-                $connectionSettings->setUseTls($firstDevice->use_ssl);
+                $endTime = microtime(true);
+                $connectionTime = round(($endTime - $startTime) * 1000, 2);
                 
-                if ($firstDevice->username) {
-                    $connectionSettings->setUsername($firstDevice->username);
-                }
+                $this->info("✅ Connected to {$firstDevice->mqtt_host} successfully! ({$connectionTime}ms)");
                 
-                if ($firstDevice->password) {
-                    $connectionSettings->setPassword($firstDevice->password);
-                }
+                $this->mqttClients[$brokerKey] = $mqtt;
 
-                // Create MQTT client
-                $clientId = 'laravel_universal_' . time() . '_' . substr(md5($brokerKey), 0, 8);
-                $port = $firstDevice->port ?: ($firstDevice->use_ssl ? 8883 : 1883);
-                
-                $this->info("⏳ Attempting connection to {$firstDevice->mqtt_host}:{$port} (timeout: 5s)");
-                
-                $mqtt = new MqttClient($firstDevice->mqtt_host, $port, $clientId);
-                
-                // Use a timeout wrapper for the connection
-                $connected = false;
-                $startTime = time();
-                
-                try {
-                    $mqtt->connect($connectionSettings, true);
-                    $connected = true;
-                    $this->info("✅ Connected to {$firstDevice->mqtt_host} successfully!");
-                } catch (\Exception $connectException) {
-                    $this->warn("❌ Failed to connect to {$firstDevice->mqtt_host}: " . $connectException->getMessage());
-                    throw $connectException;
-                }
-                
-                if ($connected) {
-                    $this->mqttClients[$brokerKey] = $mqtt;
-
-                    // Subscribe to all topics for devices on this broker
-                    foreach ($devices as $device) {
-                        foreach ($device->mqtt_topics as $topic) {
-                            $this->info("📋 Subscribing to topic: {$topic} (Device: {$device->name})");
-                            try {
-                                $mqtt->subscribe($topic, function (string $topic, string $message) use ($device) {
-                                    $this->processMqttMessage($device, $topic, $message);
-                                }, 0);
-                            } catch (\Exception $subException) {
-                                $this->warn("⚠️ Failed to subscribe to {$topic}: " . $subException->getMessage());
-                            }
-                        }
-                        
-                        // Update device status to online
-                        $device->update([
-                            'status' => 'online',
-                            'last_seen_at' => now()
-                        ]);
-                    }
-                }
-
-            } catch (\Exception $e) {
-                $this->error("❌ Broker connection failed: {$firstDevice->mqtt_host} - " . $e->getMessage());
-                $this->warn("⚠️ Skipping broker {$firstDevice->mqtt_host} and continuing with others...");
-                
-                // Update device status to error for all devices on this broker
+                // Subscribe to all topics for devices on this broker
+                $this->info("📡 Starting topic subscriptions...");
                 foreach ($devices as $device) {
+                    $this->info("🎯 Processing device: {$device->name}");
+                    foreach ($device->mqtt_topics as $topic) {
+                        $this->info("📋 Subscribing to topic: {$topic}");
+                        try {
+                            $mqtt->subscribe($topic, function (string $topic, string $message) use ($device) {
+                                $this->processMqttMessage($device, $topic, $message);
+                            }, 0);
+                            $this->info("   ✅ Subscribed successfully");
+                        } catch (\Exception $subException) {
+                            $this->warn("   ⚠️ Failed to subscribe: " . $subException->getMessage());
+                        }
+                    }
+                    
+                    // Update device status to online
                     $device->update([
-                        'status' => 'error',
+                        'status' => 'online',
                         'last_seen_at' => now()
                     ]);
+                    $this->info("   📊 Device status updated to online");
                 }
                 
-                // Continue to next broker instead of failing completely
-                continue;
+            } catch (\Exception $connectException) {
+                $endTime = microtime(true);
+                $connectionTime = round(($endTime - $startTime) * 1000, 2);
+                
+                $this->error("❌ Connection failed after {$connectionTime}ms");
+                $this->error("❌ Error details: " . $connectException->getMessage());
+                $this->error("❌ Error code: " . $connectException->getCode());
+                
+                // Log additional debugging info
+                if (method_exists($connectException, 'getTraceAsString')) {
+                    $this->error("📍 Stack trace: " . substr($connectException->getTraceAsString(), 0, 500));
+                }
+                
+                throw $connectException;
             }
+
+        } catch (\Exception $e) {
+            $this->error("💥 Broker connection completely failed: {$firstDevice->mqtt_host}");
+            $this->error("💥 Final error: " . $e->getMessage());
+            $this->error("💥 Error class: " . get_class($e));
+            
+            $this->warn("⚠️ Skipping broker {$firstDevice->mqtt_host} and continuing with others...");
+            
+            // Update device status to error for all devices on this broker
+            foreach ($devices as $device) {
+                $device->update([
+                    'status' => 'error',
+                    'last_seen_at' => now()
+                ]);
+                $this->warn("   📊 Device {$device->name} status updated to error");
+            }
+            
+            // Continue to next broker instead of failing completely
+            continue;
         }
-        
-        // Check if we have any successful connections
-        if (empty($this->mqttClients)) {
-            throw new \Exception("Failed to connect to any MQTT brokers!");
-        }
-        
-        $this->info("🎯 Successfully connected to " . count($this->mqttClients) . " broker(s)");
     }
+    
+    // Check if we have any successful connections
+    if (empty($this->mqttClients)) {
+        throw new \Exception("Failed to connect to any MQTT brokers!");
+    }
+    
+    $this->info("🎯 Successfully connected to " . count($this->mqttClients) . " broker(s)");
+}
+
+
+
+
 
 
     private function groupDevicesByBroker()
