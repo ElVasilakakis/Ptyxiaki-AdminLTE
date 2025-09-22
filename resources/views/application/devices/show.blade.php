@@ -133,12 +133,57 @@
             font-size: 0.875rem;
             color: #6b7280;
         }
+
+        .threshold-violation {
+            background-color: #fef2f2;
+            border-left: 4px solid #ef4444;
+        }
+
+        .threshold-warning {
+            background-color: #fffbeb;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .threshold-normal {
+            background-color: #f0fdf4;
+            border-left: 4px solid #22c55e;
+        }
+
+        .land-boundary-alert {
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .land-boundary-alert.inside {
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        .land-boundary-alert.outside {
+            background-color: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .land-boundary-alert.unknown {
+            background-color: #f3f4f6;
+            color: #6b7280;
+            border: 1px solid #d1d5db;
+        }
     </style>
 @endsection
 
 @section('scripts')
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Turf.js for geospatial calculations -->
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 
     @if($device->connection_type === 'mqtt')
         <!-- MQTT Device Script -->
@@ -146,6 +191,7 @@
             // MQTT device functionality
             let map;
             let deviceMarker;
+            let landPolygon;
             let distanceMode = false;
             let distanceMarker;
             let distanceLine;
@@ -171,6 +217,28 @@
                     attribution: '© OpenStreetMap contributors'
                 }).addTo(map);
 
+                // Add land polygon if geojson data exists
+                @if($device->land && $device->land->geojson)
+                    const landGeojson = @json($device->land->geojson);
+                    const landColor = '{{ $device->land->color ?? "#3388ff" }}';
+                    
+                    if (landGeojson) {
+                        landPolygon = L.geoJSON(landGeojson, {
+                            style: {
+                                color: landColor,
+                                weight: 3,
+                                opacity: 0.8,
+                                fillColor: landColor,
+                                fillOpacity: 0.2
+                            }
+                        }).addTo(map);
+                        
+                        // Fit map to show both device and land
+                        const group = new L.featureGroup([landPolygon]);
+                        map.fitBounds(group.getBounds().pad(0.1));
+                    }
+                @endif
+
                 // Add device marker if location data exists
                 @if($device->sensors->whereIn('sensor_type', ['latitude', 'longitude'])->count() >= 2)
                     @php
@@ -186,6 +254,9 @@
                             .bindPopup('<strong>{{ $device->name }}</strong><br>{{ $device->device_id }}');
 
                         map.setView([deviceLat, deviceLng], 15);
+                        
+                        // Check if device is inside land boundary
+                        checkBoundaryStatus();
                     @endif
                 @endif
             }
@@ -270,6 +341,67 @@
                         element.querySelector('.sensor-timestamp').textContent = sensor.time_since_reading;
                     }
                 });
+                
+                // Update device location if GPS coordinates changed
+                const latSensor = sensors.find(s => s.sensor_type === 'latitude');
+                const lngSensor = sensors.find(s => s.sensor_type === 'longitude');
+                
+                if (latSensor && lngSensor && latSensor.value && lngSensor.value) {
+                    const newLat = parseFloat(latSensor.value);
+                    const newLng = parseFloat(lngSensor.value);
+                    
+                    if (deviceMarker) {
+                        deviceMarker.setLatLng([newLat, newLng]);
+                    } else {
+                        deviceMarker = L.marker([newLat, newLng])
+                            .addTo(map)
+                            .bindPopup('<strong>{{ $device->name }}</strong><br>{{ $device->device_id }}');
+                    }
+                    
+                    // Check boundary status with new coordinates
+                    checkBoundaryStatus();
+                }
+            }
+
+            function checkBoundaryStatus() {
+                if (!deviceMarker || !landPolygon) {
+                    updateBoundaryAlert('unknown', 'Location boundary status unknown');
+                    return;
+                }
+                
+                const deviceLatLng = deviceMarker.getLatLng();
+                const point = turf.point([deviceLatLng.lng, deviceLatLng.lat]);
+                
+                // Get the polygon from the land geojson
+                @if($device->land && $device->land->geojson)
+                    const landGeojson = @json($device->land->geojson);
+                    
+                    try {
+                        const isInside = turf.booleanPointInPolygon(point, landGeojson);
+                        
+                        if (isInside) {
+                            updateBoundaryAlert('inside', 'Device is inside {{ $device->land->land_name ?? "land boundary" }}');
+                        } else {
+                            updateBoundaryAlert('outside', 'Device is outside {{ $device->land->land_name ?? "land boundary" }}');
+                        }
+                    } catch (error) {
+                        console.error('Error checking boundary:', error);
+                        updateBoundaryAlert('unknown', 'Error checking boundary status');
+                    }
+                @else
+                    updateBoundaryAlert('unknown', 'No land boundary defined');
+                @endif
+            }
+
+            function updateBoundaryAlert(status, message) {
+                const alertElement = document.getElementById('boundary-alert');
+                if (alertElement) {
+                    alertElement.className = `land-boundary-alert ${status}`;
+                    alertElement.innerHTML = `
+                        <i class="ph-${status === 'inside' ? 'check-circle' : status === 'outside' ? 'warning-circle' : 'question'} me-2"></i>
+                        ${message}
+                    `;
+                }
             }
 
         </script>

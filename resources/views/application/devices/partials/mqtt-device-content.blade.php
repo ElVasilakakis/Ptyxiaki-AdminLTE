@@ -168,7 +168,15 @@
                         </thead>
                         <tbody>
                             @foreach($device->sensors as $sensor)
-                                <tr class="sensor-row" id="sensor-{{ $sensor->id }}">
+                                @php 
+                                    $alertStatus = $sensor->getAlertStatus();
+                                    $thresholdClass = match($alertStatus) {
+                                        'high' => 'threshold-violation',
+                                        'low' => 'threshold-warning', 
+                                        default => 'threshold-normal'
+                                    };
+                                @endphp
+                                <tr class="sensor-row {{ $thresholdClass }}" id="sensor-{{ $sensor->id }}">
                                     <td>
                                         <div class="d-flex align-items-center">
                                             @switch($sensor->sensor_type)
@@ -254,6 +262,21 @@
         </div>
     @endif
 
+    <!-- Land Boundary Status -->
+    @if($device->land && $device->land->geojson)
+        <div class="row mb-4">
+            <div class="col-12">
+                <h6 class="mb-3">
+                    <i class="ph-map-trifold me-2"></i>Land Boundary Status
+                </h6>
+                <div id="boundary-alert" class="land-boundary-alert unknown">
+                    <i class="ph-question me-2"></i>
+                    Checking boundary status...
+                </div>
+            </div>
+        </div>
+    @endif
+
     <!-- Device Location Map -->
     @php
         $hasLocationData = $device->sensors->whereIn('sensor_type', ['latitude', 'longitude'])->count() >= 2;
@@ -265,6 +288,11 @@
         <div class="col-12">
             <h6 class="mb-3">
                 <i class="ph-map-pin me-2"></i>Device Location
+                @if($device->land && $device->land->geojson)
+                    <span class="badge bg-info bg-opacity-10 text-info ms-2">
+                        <i class="ph-polygon me-1"></i>{{ $device->land->land_name }}
+                    </span>
+                @endif
             </h6>
             
             <div class="d-flex justify-content-between align-items-center mb-3">

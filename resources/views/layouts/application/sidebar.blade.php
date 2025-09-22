@@ -74,12 +74,6 @@
                         <span>How To</span>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a href="{{route('app.lorawan-guide')}}" class="nav-link {{ request()->routeIs('app.lorawan-guide') ? 'active' : '' }}">
-                        <i class="ph-broadcast"></i>
-                        <span>How to The Things Stack LoRaWAN</span>
-                    </a>
-                </li>
 
             </ul>
         </div>
