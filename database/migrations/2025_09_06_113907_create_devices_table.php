@@ -15,7 +15,7 @@ return new class extends Migration
 
             // Device basic info
             $table->string('device_id')->unique();
-            $table->string('name');
+            $table->string('name')->unique();
             $table->string('device_type')->default('sensor');
             $table->text('description')->nullable();
             $table->boolean('is_active')->default(true);

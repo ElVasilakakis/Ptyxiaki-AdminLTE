@@ -9,8 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('devices', function (Blueprint $table) {
-            $table->json('mqtt_topics')->nullable()->after('timeout');
-            $table->string('mqtt_host')->nullable()->after('mqtt_topics');
+            $table->json('mqtt_topics')->nullable()->after('timeout')->nullable();
+            $table->string('mqtt_host')->nullable()->after('mqtt_topics')->nullable();
         });
     }
 
