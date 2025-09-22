@@ -7,7 +7,8 @@ use App\Models\Device;
 use App\Models\Sensor;
 use PhpMqtt\Client\MqttClient;
 use PhpMqtt\Client\ConnectionSettings;
-use PhpMqtt\Client\Exceptions\MqttClientException;
+use Bluerhinos\phpMQTT; // Ensure this is correctly included
+
 
 class UniversalMQTTListener extends Command
 {
@@ -17,8 +18,22 @@ class UniversalMQTTListener extends Command
     private $mqttClients = [];
     private $devices = [];
 
+    // Define broker-specific client mappings
+    private $brokerClientMap = [
+        'the_things_stack' => 'bluerhinos',
+        'thethings_stack' => 'bluerhinos',
+        'ttn' => 'bluerhinos',
+        'lorawan' => 'bluerhinos',
+        'hivemq' => 'php-mqtt',
+        'hivemq_cloud' => 'php-mqtt', 
+        'emqx' => 'php-mqtt',
+        'esp32' => 'php-mqtt',
+    ];
+
     public function handle()
     {
+
+
         $timeout = (int) $this->option('timeout');
 
         // Get all MQTT devices
@@ -35,7 +50,9 @@ class UniversalMQTTListener extends Command
 
         $this->info("Found " . $this->devices->count() . " MQTT devices to monitor:");
         foreach ($this->devices as $device) {
-            $this->info("- {$device->name} ({$device->device_id}) - {$device->mqtt_host}");
+            $brokerType = $this->detectBrokerType($device);
+            $clientLibrary = $this->getClientLibrary($brokerType);
+            $this->info("- {$device->name} ({$device->device_id}) - {$device->mqtt_host} [{$brokerType}] -> {$clientLibrary}");
         }
 
         try {
@@ -61,184 +78,272 @@ class UniversalMQTTListener extends Command
         return 0;
     }
 
-private function connectToAllBrokers()
-{
-    $brokerGroups = $this->groupDevicesByBroker();
+    private function detectBrokerType(Device $device): string
+    {
+        // Check if explicitly set in device configuration
+        if ($device->connection_broker) {
+            return strtolower($device->connection_broker);
+        }
 
-    foreach ($brokerGroups as $brokerKey => $devices) {
-        $firstDevice = $devices->first();
+        // Auto-detect based on hostname
+        $host = strtolower($device->mqtt_host);
         
-        try {
-            $this->info("🚀 Starting connection process for: {$firstDevice->mqtt_host}");
-            
-            // Log device configuration
-            $this->info("📋 Device Configuration:");
-            $this->info("   - Host: {$firstDevice->mqtt_host}");
-            $this->info("   - Port: " . ($firstDevice->port ?: ($firstDevice->use_ssl ? 8883 : 1883)));
-            $this->info("   - Use SSL: " . ($firstDevice->use_ssl ? 'Yes' : 'No'));
-            $this->info("   - Username: " . ($firstDevice->username ?: 'None'));
-            $this->info("   - Password: " . ($firstDevice->password ? 'Set (length: ' . strlen($firstDevice->password) . ')' : 'None'));
-            $this->info("   - Keep Alive: " . ($firstDevice->keepalive ?: 60));
-            
-            // Create connection settings
-            $this->info("🔧 Creating connection settings...");
-            $connectionSettings = new ConnectionSettings();
-            $connectionSettings->setKeepAliveInterval($firstDevice->keepalive ?: 60);
-            $connectionSettings->setConnectTimeout(15);
-            $connectionSettings->setSocketTimeout(15);
-            $connectionSettings->setUseTls($firstDevice->use_ssl);
-            $this->info("   ✅ Connection settings created");
-            
-            // Set specific settings for The Things Stack
-            if (str_contains($firstDevice->mqtt_host, 'thethings')) {
-                $this->info("🔧 Detected The Things Stack - applying special configuration");
-                $this->info("   - MQTT Protocol: Default (3.1.1)");
-                $this->info("   - QoS: 0 (required by TTS)");
-                
-                // More permissive TLS settings for TTS
-                $connectionSettings->setTlsSelfSignedAllowed(true);
-                $connectionSettings->setTlsVerifyPeer(false);
-                $connectionSettings->setTlsVerifyPeerName(false);
-                
-                // Set shorter timeout specifically for TTS
-                $connectionSettings->setConnectTimeout(5);
-                $connectionSettings->setSocketTimeout(5);
-                
-                $this->info("   - TLS Verification: Disabled (permissive mode)");
-                $this->info("   - TLS Timeout: 5 seconds");
-            }
+        if (str_contains($host, 'thethings') || str_contains($host, 'ttn')) {
+            return 'thethings_stack';
+        }
+        
+        if (str_contains($host, 'hivemq')) {
+            return 'hivemq';
+        }
+        
+        if (str_contains($host, 'emqx')) {
+            return 'emqx';
+        }
 
+        // Default fallback
+        return 'emqx';
+    }
 
-            
-            if ($firstDevice->username) {
-                $this->info("🔐 Setting username: {$firstDevice->username}");
-                $connectionSettings->setUsername($firstDevice->username);
-            }
-            
-            if ($firstDevice->password) {
-                $this->info("🔐 Setting password (hidden)");
-                $connectionSettings->setPassword($firstDevice->password);
-            }
+    private function getClientLibrary(string $brokerType): string
+    {
+        $library = $this->brokerClientMap[$brokerType] ?? 'php-mqtt';
+        
+        // Debug log to verify mapping
+        $this->info("🔍 Broker type '{$brokerType}' mapped to library '{$library}'");
+        
+        return $library;
+    }
 
-            // Create MQTT client
-            $clientId = 'laravel_universal_' . time() . '_' . substr(md5($brokerKey), 0, 8);
-            $port = $firstDevice->port ?: ($firstDevice->use_ssl ? 8883 : 1883);
-            
-            $this->info("🏗️ Creating MQTT client:");
-            $this->info("   - Host: {$firstDevice->mqtt_host}");
-            $this->info("   - Port: {$port}");
-            $this->info("   - Client ID: {$clientId}");
-            
-            $mqtt = new MqttClient($firstDevice->mqtt_host, $port, $clientId);
-            $this->info("   ✅ MQTT client created");
-            
-            $this->info("⏳ Attempting connection to {$firstDevice->mqtt_host}:{$port} (timeout: 15s)");
-            $this->info("⏳ Starting connection attempt... please wait");
-            
-            $startTime = microtime(true);
+    private function connectToAllBrokers()
+    {
+        $brokerGroups = $this->groupDevicesByBroker();
+
+        foreach ($brokerGroups as $brokerKey => $devices) {
+            $firstDevice = $devices->first();
+            $brokerType = $this->detectBrokerType($firstDevice);
+            $clientLibrary = $this->getClientLibrary($brokerType);
             
             try {
-                // Add connection progress logging
-                $this->info("🔌 Initiating MQTT connection...");
-                $mqtt->connect($connectionSettings, true);
+                $this->info("🚀 Starting connection process for: {$firstDevice->mqtt_host}");
+                $this->info("📋 Broker Type: {$brokerType} | Client Library: {$clientLibrary}");
+                $this->logDeviceConfiguration($firstDevice);
                 
-                $endTime = microtime(true);
-                $connectionTime = round(($endTime - $startTime) * 1000, 2);
-                
-                $this->info("✅ Connected to {$firstDevice->mqtt_host} successfully! ({$connectionTime}ms)");
-                
-                $this->mqttClients[$brokerKey] = $mqtt;
+                // Create appropriate client based on broker type
+                if ($clientLibrary === 'bluerhinos') {
+                    $this->info("🔧 Using BluerhiNos client for The Things Stack compatibility");
+                    $this->connectBluerhinos($brokerKey, $devices, $firstDevice);
+                } else {
+                    $this->info("🔧 Using php-mqtt client for standard MQTT");
+                    $this->connectPhpMqtt($brokerKey, $devices, $firstDevice);
+                }
 
-                // Subscribe to all topics for devices on this broker
-                $this->info("📡 Starting topic subscriptions...");
-                foreach ($devices as $device) {
-                    $this->info("🎯 Processing device: {$device->name}");
-                    foreach ($device->mqtt_topics as $topic) {
-                        $this->info("📋 Subscribing to topic: {$topic}");
-                        try {
-                            $mqtt->subscribe($topic, function (string $topic, string $message) use ($device) {
-                                $this->processMqttMessage($device, $topic, $message);
-                            }, 0);
-                            $this->info("   ✅ Subscribed successfully");
-                        } catch (\Exception $subException) {
-                            $this->warn("   ⚠️ Failed to subscribe: " . $subException->getMessage());
-                        }
-                    }
-                    
-                    // Update device status to online
-                    $device->update([
-                        'status' => 'online',
-                        'last_seen_at' => now()
-                    ]);
-                    $this->info("   📊 Device status updated to online");
-                }
-                
-            } catch (\Exception $connectException) {
-                $endTime = microtime(true);
-                $connectionTime = round(($endTime - $startTime) * 1000, 2);
-                
-                $this->error("❌ Connection failed after {$connectionTime}ms");
-                $this->error("❌ Error details: " . $connectException->getMessage());
-                $this->error("❌ Error code: " . $connectException->getCode());
-                
-                // Log additional debugging info
-                if (method_exists($connectException, 'getTraceAsString')) {
-                    $this->error("📍 Stack trace: " . substr($connectException->getTraceAsString(), 0, 500));
-                }
-                
-                throw $connectException;
+            } catch (\Exception $e) {
+                $this->handleBrokerConnectionError($firstDevice, $devices, $e);
+                continue;
             }
+        }
+        
+        // Check if we have any successful connections
+        if (empty($this->mqttClients)) {
+            throw new \Exception("Failed to connect to any MQTT brokers!");
+        }
+        
+        $this->info("🎯 Successfully connected to " . count($this->mqttClients) . " broker(s)");
+    }
 
-        } catch (\Exception $e) {
-            $this->error("💥 Broker connection completely failed: {$firstDevice->mqtt_host}");
-            $this->error("💥 Final error: " . $e->getMessage());
-            $this->error("💥 Error class: " . get_class($e));
+    private function connectBluerhinos(string $brokerKey, $devices, Device $firstDevice)
+    {
+        $this->info("🔥 Initializing BluerhiNos MQTT client for The Things Stack...");
+        
+        $clientId = 'laravel_tts_' . time() . '_' . substr(md5($brokerKey), 0, 8);
+        $port = $firstDevice->port ?: ($firstDevice->use_ssl ? 8883 : 1883);
+        
+        // For SSL connections with The Things Stack, use ssl:// prefix
+        $host = $firstDevice->mqtt_host;
+        if ($firstDevice->use_ssl) {
+            $host = 'ssl://' . $host;
+            $this->info("🔒 Using SSL connection: {$host}");
+        }
+        
+        $this->info("🏗️ Creating BluerhiNos MQTT client with ID: {$clientId}");
+        $this->info("🔗 Host: {$host}, Port: {$port}, SSL: " . ($firstDevice->use_ssl ? 'Yes' : 'No'));
+        
+        // Create phpMQTT instance using the correct namespace
+        // For SSL connections, Bluerhinos phpMQTT handles SSL internally
+        $cafile = null; // We'll let it use default SSL settings
+        if ($firstDevice->use_ssl) {
+            $this->info("🔒 SSL connection will be handled by Bluerhinos phpMQTT library");
+            // Remove ssl:// prefix as the library will handle it internally
+            $host = str_replace('ssl://', '', $host);
+        }
+        
+        $mqtt = new phpMQTT($host, $port, $clientId, $cafile);
+
+        $this->info("⏳ Connecting to The Things Stack at {$firstDevice->mqtt_host}:{$port}");
+        $startTime = microtime(true);
+        
+        // Connect with credentials (The Things Stack requires authentication)
+        if (!$firstDevice->username || !$firstDevice->password) {
+            throw new \Exception("The Things Stack requires username and password authentication");
+        }
+        
+        $this->info("🔐 Authenticating with username: {$firstDevice->username}");
+        $connected = $mqtt->connect(true, NULL, $firstDevice->username, $firstDevice->password);
+        
+        if (!$connected) {
+            throw new \Exception("Failed to connect to The Things Stack: Authentication or connection failed");
+        }
+        
+        $endTime = microtime(true);
+        $connectionTime = round(($endTime - $startTime) * 1000, 2);
+        $this->info("✅ Connected to The Things Stack successfully! ({$connectionTime}ms)");
+        
+        // Subscribe to topics for The Things Stack
+        $this->subscribeBluerhinos($mqtt, $devices);
+        
+        // Store client
+        $this->mqttClients[$brokerKey] = [
+            'client' => $mqtt,
+            'type' => 'bluerhinos',
+            'devices' => $devices
+        ];
+    }
+
+    private function connectPhpMqtt(string $brokerKey, $devices, Device $firstDevice)
+    {
+        $clientId = 'laravel_universal_' . time() . '_' . substr(md5($brokerKey), 0, 8);
+        $port = $firstDevice->port ?: ($firstDevice->use_ssl ? 8883 : 1883);
+        
+        $this->info("🏗️ Creating php-mqtt client with ID: {$clientId}");
+        
+        // Create connection settings
+        $connectionSettings = new ConnectionSettings();
+        $connectionSettings->setKeepAliveInterval($firstDevice->keepalive ?: 60);
+        $connectionSettings->setConnectTimeout(15);
+        $connectionSettings->setSocketTimeout(15);
+        $connectionSettings->setUseTls($firstDevice->use_ssl);
+        
+        // Configure for HiveMQ Cloud
+        if (str_contains($firstDevice->mqtt_host, 'hivemq')) {
+            $this->info("🔧 Configuring for HiveMQ Cloud");
+            $connectionSettings->setTlsSelfSignedAllowed(true);
+            $connectionSettings->setTlsVerifyPeer(true);
+            $connectionSettings->setTlsVerifyPeerName(true);
+        }
+        
+        // Configure for EMQX
+        if (str_contains($firstDevice->mqtt_host, 'emqx')) {
+            $this->info("🔧 Configuring for EMQX");
+            $connectionSettings->setTlsSelfSignedAllowed(true);
+            $connectionSettings->setTlsVerifyPeer(false);
+            $connectionSettings->setTlsVerifyPeerName(false);
+        }
+        
+        if ($firstDevice->username) {
+            $connectionSettings->setUsername($firstDevice->username);
+        }
+        
+        if ($firstDevice->password) {
+            $connectionSettings->setPassword($firstDevice->password);
+        }
+
+        // Create MQTT client
+        $mqtt = new MqttClient($firstDevice->mqtt_host, $port, $clientId);
+        
+        $this->info("⏳ Connecting to {$firstDevice->mqtt_host}:{$port}");
+        $startTime = microtime(true);
+        
+        $mqtt->connect($connectionSettings, true);
+        
+        $endTime = microtime(true);
+        $connectionTime = round(($endTime - $startTime) * 1000, 2);
+        $this->info("✅ Connected to {$firstDevice->mqtt_host} successfully! ({$connectionTime}ms)");
+        
+        // Subscribe to topics
+        $this->subscribePhpMqtt($mqtt, $devices);
+        
+        // Store client
+        $this->mqttClients[$brokerKey] = [
+            'client' => $mqtt,
+            'type' => 'php-mqtt',
+            'devices' => $devices
+        ];
+    }
+
+    private function subscribeBluerhinos($mqtt, $devices)
+    {
+        $this->info("📡 Starting BluerhiNos topic subscriptions for The Things Stack...");
+        
+        // Collect all topics for this broker
+        $topics = [];
+        foreach ($devices as $device) {
+            foreach ($device->mqtt_topics as $topic) {
+                $topics[$topic] = [
+                    'qos' => 0, // QoS 0 required by The Things Stack
+                    'function' => function($receivedTopic, $message) use ($devices) {
+                        $this->handleMqttMessage($devices, $receivedTopic, $message);
+                    }
+                ];
+                $this->info("📋 Added TTS topic for subscription: {$topic}");
+            }
+        }
+        
+        if (!empty($topics)) {
+            $this->info("🔔 Subscribing to " . count($topics) . " The Things Stack topics...");
+            $mqtt->subscribe($topics, 0);
+            $this->info("✅ Subscribed to " . count($topics) . " TTS topics successfully");
             
-            $this->warn("⚠️ Skipping broker {$firstDevice->mqtt_host} and continuing with others...");
-            
-            // Update device status to error for all devices on this broker
+            // Update all devices status to online
             foreach ($devices as $device) {
                 $device->update([
-                    'status' => 'error',
+                    'status' => 'online',
                     'last_seen_at' => now()
                 ]);
-                $this->warn("   📊 Device {$device->name} status updated to error");
+                $this->info("   📊 Device {$device->name} status updated to online");
             }
-            
-            // Continue to next broker instead of failing completely
-            continue;
         }
     }
-    
-    // Check if we have any successful connections
-    if (empty($this->mqttClients)) {
-        throw new \Exception("Failed to connect to any MQTT brokers!");
-    }
-    
-    $this->info("🎯 Successfully connected to " . count($this->mqttClients) . " broker(s)");
-}
 
-
-
-
-
-
-    private function groupDevicesByBroker()
+    private function subscribePhpMqtt($mqtt, $devices)
     {
-        return $this->devices->groupBy(function ($device) {
-            return $device->mqtt_host . ':' . ($device->port ?: ($device->use_ssl ? 8883 : 1883)) . ':' . ($device->username ?: 'anonymous');
-        });
+        $this->info("📡 Starting php-mqtt topic subscriptions...");
+        
+        foreach ($devices as $device) {
+            $this->info("🎯 Processing device: {$device->name}");
+            foreach ($device->mqtt_topics as $topic) {
+                $this->info("📋 Subscribing to topic: {$topic}");
+                try {
+                    $mqtt->subscribe($topic, function (string $topic, string $message) use ($devices) {
+                        $this->handleMqttMessage($devices, $topic, $message);
+                    }, 0);
+                    $this->info("   ✅ Subscribed successfully");
+                } catch (\Exception $subException) {
+                    $this->warn("   ⚠️ Failed to subscribe: " . $subException->getMessage());
+                }
+            }
+            
+            // Update device status to online
+            $device->update([
+                'status' => 'online',
+                'last_seen_at' => now()
+            ]);
+            $this->info("   📊 Device status updated to online");
+        }
     }
 
     private function runWithTimeout($timeout)
     {
         $startTime = time();
         while ((time() - $startTime) < $timeout) {
-            foreach ($this->mqttClients as $mqtt) {
+            foreach ($this->mqttClients as $brokerKey => $clientData) {
                 try {
-                    $mqtt->loop(false, 1); // Non-blocking loop with 1 second timeout
+                    if ($clientData['type'] === 'bluerhinos') {
+                        $clientData['client']->proc();
+                    } else {
+                        $clientData['client']->loop(false, 1);
+                    }
                 } catch (\Exception $e) {
-                    $this->warn("Loop error: " . $e->getMessage());
+                    $this->warn("Loop error for {$brokerKey}: " . $e->getMessage());
                 }
             }
             usleep(100000); // Sleep 100ms between loops
@@ -248,27 +353,133 @@ private function connectToAllBrokers()
     private function runIndefinitely()
     {
         while (true) {
-            foreach ($this->mqttClients as $mqtt) {
+            foreach ($this->mqttClients as $brokerKey => $clientData) {
                 try {
-                    $mqtt->loop(false, 1); // Non-blocking loop with 1 second timeout
+                    if ($clientData['type'] === 'bluerhinos') {
+                        $clientData['client']->proc();
+                    } else {
+                        $clientData['client']->loop(false, 1);
+                    }
                 } catch (\Exception $e) {
-                    $this->warn("Loop error: " . $e->getMessage());
+                    $this->warn("Loop error for {$brokerKey}: " . $e->getMessage());
+                    $this->attemptReconnection($brokerKey, $clientData);
                 }
             }
             usleep(100000); // Sleep 100ms between loops
         }
     }
 
+    private function attemptReconnection($brokerKey, $clientData)
+    {
+        $this->info("🔄 Attempting to reconnect to {$brokerKey}...");
+        
+        try {
+            $devices = $clientData['devices'];
+            $firstDevice = $devices->first();
+            $brokerType = $this->detectBrokerType($firstDevice);
+            $clientLibrary = $this->getClientLibrary($brokerType);
+            
+            // Remove failed client
+            unset($this->mqttClients[$brokerKey]);
+            
+            // Attempt reconnection with appropriate client
+            if ($clientLibrary === 'bluerhinos') {
+                $this->connectBluerhinos($brokerKey, $devices, $firstDevice);
+            } else {
+                $this->connectPhpMqtt($brokerKey, $devices, $firstDevice);
+            }
+            
+            $this->info("✅ Reconnected to {$brokerKey} successfully");
+            
+        } catch (\Exception $e) {
+            $this->error("❌ Reconnection failed for {$brokerKey}: " . $e->getMessage());
+            
+            // Update devices to error status
+            foreach ($clientData['devices'] as $device) {
+                $device->update([
+                    'status' => 'error',
+                    'last_seen_at' => now()
+                ]);
+            }
+        }
+    }
+
     private function disconnectAll()
     {
-        foreach ($this->mqttClients as $brokerKey => $mqtt) {
+        foreach ($this->mqttClients as $brokerKey => $clientData) {
             try {
-                $mqtt->disconnect();
+                if ($clientData['type'] === 'bluerhinos') {
+                    $clientData['client']->close();
+                } else {
+                    $clientData['client']->disconnect();
+                }
                 $this->info("Disconnected from broker: {$brokerKey}");
             } catch (\Exception $e) {
                 $this->warn("Error disconnecting from {$brokerKey}: " . $e->getMessage());
             }
         }
+    }
+
+    private function logDeviceConfiguration(Device $firstDevice)
+    {
+        $this->info("📋 Device Configuration:");
+        $this->info("   - Host: {$firstDevice->mqtt_host}");
+        $this->info("   - Port: " . ($firstDevice->port ?: ($firstDevice->use_ssl ? 8883 : 1883)));
+        $this->info("   - Use SSL: " . ($firstDevice->use_ssl ? 'Yes' : 'No'));
+        $this->info("   - Username: " . ($firstDevice->username ?: 'None'));
+        $this->info("   - Password: " . ($firstDevice->password ? 'Set (length: ' . strlen($firstDevice->password) . ')' : 'None'));
+        $this->info("   - Keep Alive: " . ($firstDevice->keepalive ?: 60));
+    }
+
+    private function handleBrokerConnectionError(Device $firstDevice, $devices, \Exception $e)
+    {
+        $this->error("💥 Broker connection failed: {$firstDevice->mqtt_host}");
+        $this->error("💥 Error: " . $e->getMessage());
+        
+        // Update device status to error for all devices on this broker
+        foreach ($devices as $device) {
+            $device->update([
+                'status' => 'error',
+                'last_seen_at' => now()
+            ]);
+            $this->warn("   📊 Device {$device->name} status updated to error");
+        }
+    }
+
+    private function groupDevicesByBroker()
+    {
+        return $this->devices->groupBy(function ($device) {
+            return $device->mqtt_host . ':' . ($device->port ?: ($device->use_ssl ? 8883 : 1883)) . ':' . ($device->username ?: 'anonymous');
+        });
+    }
+
+    private function handleMqttMessage($devices, $topic, $message)
+    {
+        // Find the device that matches this message topic
+        $matchedDevice = null;
+        foreach ($devices as $device) {
+            foreach ($device->mqtt_topics as $deviceTopic) {
+                if ($this->topicMatches($deviceTopic, $topic)) {
+                    $matchedDevice = $device;
+                    break 2;
+                }
+            }
+        }
+
+        if ($matchedDevice) {
+            $this->processMqttMessage($matchedDevice, $topic, $message);
+        } else {
+            $this->warn("⚠️ Received message on unmatched topic: {$topic}");
+        }
+    }
+
+    private function topicMatches($pattern, $topic)
+    {
+        // Convert MQTT wildcards to regex
+        $pattern = str_replace(['+', '#'], ['[^/]+', '.*'], $pattern);
+        $pattern = '/^' . str_replace('/', '\/', $pattern) . '$/';
+        
+        return preg_match($pattern, $topic);
     }
 
     private function processMqttMessage(Device $device, string $topic, string $message)
@@ -317,9 +528,20 @@ private function connectToAllBrokers()
         
         switch (strtolower($brokerType)) {
             case 'the_things_stack':
+            case 'thethings_stack':
             case 'ttn':
             case 'lorawan':
                 $this->handleTheThingsStackPayload($device, $data, $topic);
+                break;
+                
+            case 'hivemq':
+            case 'hivemq_cloud':
+                // Handle HiveMQ format (usually simple key-value or ESP32-style)
+                if (isset($data['sensors']) && is_array($data['sensors'])) {
+                    $this->handleESP32Payload($device, $data, $topic);
+                } else {
+                    $this->handleSimplePayload($device, $data, $topic);
+                }
                 break;
                 
             case 'emqx':
