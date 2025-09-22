@@ -128,25 +128,20 @@ class UniversalMQTTListener extends Command
         $cafile = null;
         
         if ($firstDevice->use_ssl) {
-            $this->info("🔒 Configuring SSL connection for {$brokerType}");
+            $this->warn("⚠️ SSL connections are not fully supported by BluerhiNos phpMQTT library");
+            $this->warn("   Skipping SSL device: {$brokerType} at {$host}:{$port}");
+            $this->warn("   For The Things Stack, consider using webhook integration instead");
             
-            // Different SSL handling based on broker type
-            switch ($brokerType) {
-                case 'thethings_stack':
-                    // The Things Stack uses standard SSL
-                    $this->info("   - The Things Stack SSL configuration");
-                    break;
-                    
-                case 'hivemq':
-                    // HiveMQ Cloud requires proper SSL verification
-                    $this->info("   - HiveMQ Cloud SSL configuration");
-                    break;
-                    
-                case 'emqx':
-                    // EMQX can use self-signed or standard SSL
-                    $this->info("   - EMQX SSL configuration");
-                    break;
+            // Update devices to indicate SSL limitation
+            foreach ($devices as $device) {
+                $device->update([
+                    'status' => 'error',
+                    'last_seen_at' => now()
+                ]);
+                $this->warn("   📊 Device {$device->name} status updated to error (SSL not supported)");
             }
+            
+            throw new \Exception("SSL connections not supported by BluerhiNos phpMQTT library");
         }
         
         $this->info("🏗️ Creating BluerhiNos MQTT client with ID: {$clientId}");
