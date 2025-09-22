@@ -31,12 +31,15 @@ class Device extends Model
         'max_reconnect_attempts',
         'keepalive',
         'timeout',
+        'mqtt_topics',
+        'mqtt_host',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'use_ssl' => 'boolean',
         'auto_reconnect' => 'boolean',
+        'mqtt_topics' => 'array',
     ];
 
     protected $attributes = [

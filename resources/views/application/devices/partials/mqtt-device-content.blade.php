@@ -6,7 +6,12 @@
             MQTT Device - {{ $device->device_id }}
         </div>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 align-items-center">
+        @if($device->mqtt_host && $device->mqtt_topics && count($device->mqtt_topics) > 0)
+            <button type="button" class="btn btn-success btn-sm" onclick="startMqttListener()">
+                <i class="ph-play me-1"></i>Start Listener
+            </button>
+        @endif
         <span class="badge bg-info bg-opacity-10 text-info">
             <i class="ph-broadcast me-1"></i>
             MQTT
@@ -91,6 +96,12 @@
                                 <span class="text-muted">{{ ucfirst(str_replace('_', ' ', $device->connection_broker)) }}</span>
                             </div>
                         @endif
+                        @if($device->mqtt_host)
+                            <div class="col-sm-6 mt-2">
+                                <strong>MQTT Host:</strong><br>
+                                <span class="text-muted">{{ $device->mqtt_host }}</span>
+                            </div>
+                        @endif
                         @if($device->port)
                             <div class="col-sm-6 mt-2">
                                 <strong>Port:</strong><br>
@@ -123,10 +134,21 @@
                             <strong>Timeout:</strong><br>
                             <span class="text-muted">{{ $device->timeout }}s</span>
                         </div>
+                        @if($device->mqtt_topics && count($device->mqtt_topics) > 0)
+                            <div class="col-12 mt-3">
+                                <strong>MQTT Topics:</strong><br>
+                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                    @foreach($device->mqtt_topics as $topic)
+                                        <span class="badge bg-secondary bg-opacity-10 text-secondary">{{ $topic }}</span>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
                     </div>
                 </div>
             </div>
         </div>
+
     </div>
 
     <!-- Sensor Data -->
@@ -244,32 +266,34 @@
         $lngSensor = $device->sensors->where('sensor_type', 'longitude')->first();
     @endphp
 
-    @if($hasLocationData && $latSensor && $lngSensor && $latSensor->value && $lngSensor->value)
-        <div class="row mb-4">
-            <div class="col-12">
-                <h6 class="mb-3">
-                    <i class="ph-map-pin me-2"></i>Device Location
-                </h6>
-                
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
+    <div class="row mb-4">
+        <div class="col-12">
+            <h6 class="mb-3">
+                <i class="ph-map-pin me-2"></i>Device Location
+            </h6>
+            
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    @if($hasLocationData && $latSensor && $lngSensor && $latSensor->value && $lngSensor->value)
                         <span class="text-muted">Coordinates: </span>
                         <strong>{{ number_format($latSensor->value, 6) }}, {{ number_format($lngSensor->value, 6) }}</strong>
-                    </div>
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="locateDevice()">
-                            <i class="ph-crosshairs me-1"></i>Locate Device
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="distance-btn" onclick="toggleDistanceMode()">
-                            <i class="ph-ruler me-1"></i>Measure Distance
-                        </button>
-                    </div>
+                    @else
+                        <span class="text-muted">Waiting for location data from MQTT...</span>
+                    @endif
                 </div>
-                
-                <div id="map"></div>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="locateDevice()">
+                        <i class="ph-crosshairs me-1"></i>Locate Device
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="distance-btn" onclick="toggleDistanceMode()">
+                        <i class="ph-ruler me-1"></i>Measure Distance
+                    </button>
+                </div>
             </div>
+            
+            <div id="map"></div>
         </div>
-    @endif
+    </div>
 
     <!-- Actions -->
     <div class="d-flex justify-content-between align-items-center">

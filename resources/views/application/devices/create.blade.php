@@ -62,6 +62,32 @@ function toggleSSLPort() {
     }
 }
 
+// Add MQTT topic field
+function addMqttTopic() {
+    const container = document.getElementById('mqtt-topics-container');
+    const topicCount = container.children.length;
+    
+    const newTopicDiv = document.createElement('div');
+    newTopicDiv.className = 'input-group mb-2';
+    newTopicDiv.innerHTML = `
+        <input type="text" name="mqtt_topics[]" class="form-control" 
+               placeholder="sensors/humidity">
+        <button type="button" class="btn btn-outline-danger" onclick="removeMqttTopic(this)">
+            <i class="ph-minus"></i>
+        </button>
+    `;
+    
+    container.appendChild(newTopicDiv);
+}
+
+// Remove MQTT topic field
+function removeMqttTopic(button) {
+    const container = document.getElementById('mqtt-topics-container');
+    if (container.children.length > 1) {
+        button.parentElement.remove();
+    }
+}
+
 // Initialize form interactions
 document.addEventListener('DOMContentLoaded', function() {
     // Auto-generate device ID when name or type changes
@@ -318,6 +344,33 @@ document.addEventListener('DOMContentLoaded', function() {
                                                placeholder="30" value="{{ old('timeout', 30) }}" min="1" max="300">
                                         @error('timeout')
                                             <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">MQTT Host</label>
+                                        <input type="text" name="mqtt_host" class="form-control @error('mqtt_host') is-invalid @enderror" 
+                                               placeholder="broker.hivemq.com" value="{{ old('mqtt_host') }}">
+                                        <small class="form-text text-muted">MQTT broker hostname or IP address</small>
+                                        @error('mqtt_host')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">MQTT Topics</label>
+                                        <div id="mqtt-topics-container">
+                                            <div class="input-group mb-2">
+                                                <input type="text" name="mqtt_topics[]" class="form-control" 
+                                                       placeholder="sensors/temperature" value="{{ old('mqtt_topics.0') }}">
+                                                <button type="button" class="btn btn-outline-success" onclick="addMqttTopic()">
+                                                    <i class="ph-plus"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <small class="form-text text-muted">Topics this device will subscribe to for sensor data</small>
+                                        @error('mqtt_topics')
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
                                         @enderror
                                     </div>
                                 </div>

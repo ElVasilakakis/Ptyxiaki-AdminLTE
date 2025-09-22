@@ -79,6 +79,10 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
         
         // LoRaWAN Data Polling Route
         Route::post('/{device}/poll-lorawan', [DevicesController::class, 'pollLorawanData'])->name('app.devices.poll-lorawan');
+        
+        // MQTT Control Routes
+        Route::post('/{device}/mqtt/start', [\App\Http\Controllers\Application\MQTTController::class, 'startListener'])->name('app.devices.mqtt.start');
+        Route::get('/{device}/mqtt/test', [\App\Http\Controllers\Application\MQTTController::class, 'testDevice'])->name('app.devices.mqtt.test');
     });
 
     Route::group(['prefix' => 'sensors'], function () {

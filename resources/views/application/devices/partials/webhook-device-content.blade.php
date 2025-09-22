@@ -39,14 +39,10 @@
                     </td>
                 </tr>
                 <tr>
-                    <td><strong>Protocol:</strong></td>
+                    <td><strong>Connection:</strong></td>
                     <td>
-                        <span class="badge bg-success bg-opacity-10 text-success">{{ ucfirst($device->protocol) }}</span>
+                        <span class="badge bg-success bg-opacity-10 text-success">{{ ucfirst($device->connection_type) }}</span>
                     </td>
-                </tr>
-                <tr>
-                    <td><strong>Connector:</strong></td>
-                    <td>{{ $device->mqttBroker->name }}</td>
                 </tr>
                 <tr>
                     <td><strong>Land:</strong></td>

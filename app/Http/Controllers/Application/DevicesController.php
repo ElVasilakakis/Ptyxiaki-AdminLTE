@@ -52,6 +52,9 @@ class DevicesController extends Controller
             'max_reconnect_attempts' => 'nullable|integer|min:1|max:100',
             'keepalive' => 'nullable|integer|min:1|max:3600',
             'timeout' => 'nullable|integer|min:1|max:300',
+            'mqtt_host' => 'nullable|string|max:255',
+            'mqtt_topics' => 'nullable|array',
+            'mqtt_topics.*' => 'string|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -91,6 +94,8 @@ class DevicesController extends Controller
             'max_reconnect_attempts' => $request->max_reconnect_attempts ?: 3,
             'keepalive' => $request->keepalive ?: 60,
             'timeout' => $request->timeout ?: 30,
+            'mqtt_host' => $request->mqtt_host,
+            'mqtt_topics' => $request->mqtt_topics,
         ]);
 
         return redirect()->route('app.devices.index')
@@ -171,6 +176,9 @@ class DevicesController extends Controller
             'max_reconnect_attempts' => 'nullable|integer|min:1|max:100',
             'keepalive' => 'nullable|integer|min:1|max:3600',
             'timeout' => 'nullable|integer|min:1|max:300',
+            'mqtt_host' => 'nullable|string|max:255',
+            'mqtt_topics' => 'nullable|array',
+            'mqtt_topics.*' => 'string|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -209,6 +217,8 @@ class DevicesController extends Controller
             'max_reconnect_attempts' => $request->max_reconnect_attempts ?: $device->max_reconnect_attempts,
             'keepalive' => $request->keepalive ?: $device->keepalive,
             'timeout' => $request->timeout ?: $device->timeout,
+            'mqtt_host' => $request->mqtt_host,
+            'mqtt_topics' => $request->mqtt_topics,
         ]);
 
         return redirect()->route('app.devices.index')

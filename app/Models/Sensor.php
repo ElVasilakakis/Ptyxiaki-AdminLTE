@@ -17,25 +17,20 @@ class Sensor extends Model
         'sensor_type',
         'sensor_name',
         'description',
-        'location',
         'unit',
-        'thresholds',
+        'min_threshold',
+        'max_threshold',
         'value',
         'reading_timestamp',
         'enabled',
-        'alert_enabled',
-        'alert_threshold_min',
-        'alert_threshold_max',
     ];
 
     protected $casts = [
-        'thresholds' => 'array',
         'value' => 'json',
         'reading_timestamp' => 'datetime',
         'enabled' => 'boolean',
-        'alert_enabled' => 'boolean',
-        'alert_threshold_min' => 'float',
-        'alert_threshold_max' => 'float',
+        'min_threshold' => 'float',
+        'max_threshold' => 'float',
     ];
 
     protected $dates = [
@@ -44,7 +39,6 @@ class Sensor extends Model
 
     protected $attributes = [
         'enabled' => true,
-        'alert_enabled' => false,
     ];
 
     /**
@@ -88,14 +82,6 @@ class Sensor extends Model
     }
 
     /**
-     * Scope a query to only include sensors with alerts enabled.
-     */
-    public function scopeWithAlertsEnabled($query)
-    {
-        return $query->where('alert_enabled', true);
-    }
-
-    /**
      * Scope a query to only include sensors for a specific device.
      */
     public function scopeForDevice($query, $deviceId)
@@ -112,32 +98,24 @@ class Sensor extends Model
     }
 
     /**
-     * Check if alerts are enabled for this sensor.
+     * Check if the current value is within thresholds.
      */
-    public function hasAlertsEnabled(): bool
+    public function isValueInRange(): bool
     {
-        return $this->alert_enabled;
-    }
-
-    /**
-     * Check if the current value is within alert thresholds.
-     */
-    public function isValueInAlertRange(): bool
-    {
-        if (!$this->hasAlertsEnabled() || $this->value === null) {
-            return false;
+        if ($this->value === null) {
+            return true;
         }
 
         // Only check thresholds for numeric values
         if (!is_numeric($this->value)) {
-            return false;
+            return true;
         }
 
         $numericValue = (float) $this->value;
-        $belowMin = $this->alert_threshold_min !== null && $numericValue < $this->alert_threshold_min;
-        $aboveMax = $this->alert_threshold_max !== null && $numericValue > $this->alert_threshold_max;
+        $belowMin = $this->min_threshold !== null && $numericValue < $this->min_threshold;
+        $aboveMax = $this->max_threshold !== null && $numericValue > $this->max_threshold;
 
-        return $belowMin || $aboveMax;
+        return !($belowMin || $aboveMax);
     }
 
     /**
@@ -201,11 +179,11 @@ class Sensor extends Model
     }
 
     /**
-     * Get alert status based on current value.
+     * Get threshold status based on current value.
      */
     public function getAlertStatus(): string
     {
-        if (!$this->hasAlertsEnabled() || $this->value === null) {
+        if ($this->value === null) {
             return 'normal';
         }
 
@@ -216,11 +194,11 @@ class Sensor extends Model
 
         $numericValue = (float) $this->value;
 
-        if ($this->alert_threshold_min !== null && $numericValue < $this->alert_threshold_min) {
+        if ($this->min_threshold !== null && $numericValue < $this->min_threshold) {
             return 'low';
         }
 
-        if ($this->alert_threshold_max !== null && $numericValue > $this->alert_threshold_max) {
+        if ($this->max_threshold !== null && $numericValue > $this->max_threshold) {
             return 'high';
         }
 

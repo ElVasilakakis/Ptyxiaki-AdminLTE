@@ -157,6 +157,13 @@
             });
 
             function initializeMap() {
+                // Check if map container exists before initializing
+                const mapContainer = document.getElementById('map');
+                if (!mapContainer) {
+                    console.log('Map container not found, skipping map initialization');
+                    return;
+                }
+
                 // Initialize map with default location
                 map = L.map('map').setView([38.2466, 21.7346], 10);
 
@@ -256,6 +263,88 @@
                     }
                 });
             }
+
+            function startMqttListener() {
+                const button = document.querySelector('button[onclick="startMqttListener()"]');
+                const originalText = button.innerHTML;
+                
+                // Show loading state
+                button.innerHTML = '<i class="ph-spinner ph-spin me-1"></i>Starting...';
+                button.disabled = true;
+                
+                // Make API call to start MQTT listener
+                fetch(`/app/devices/{{ $device->id }}/mqtt/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show success message
+                        showNotification('MQTT listener started successfully! Check your terminal for logs.', 'success');
+                        button.innerHTML = '<i class="ph-check me-1"></i>Listener Started';
+                        button.classList.remove('btn-success');
+                        button.classList.add('btn-outline-success');
+                        
+                        // Start refreshing sensor data more frequently
+                        if (window.sensorRefreshInterval) {
+                            clearInterval(window.sensorRefreshInterval);
+                        }
+                        window.sensorRefreshInterval = setInterval(refreshSensorData, 5000); // Every 5 seconds
+                        
+                        // Reset button after 5 seconds
+                        setTimeout(() => {
+                            button.innerHTML = originalText;
+                            button.classList.remove('btn-outline-success');
+                            button.classList.add('btn-success');
+                            button.disabled = false;
+                        }, 5000);
+                    } else {
+                        showNotification('Failed to start MQTT listener: ' + data.message, 'error');
+                        button.innerHTML = originalText;
+                        button.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error starting MQTT listener:', error);
+                    showNotification('Error starting MQTT listener. Please try manually: php artisan mqtt:listen {{ $device->device_id }}', 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                });
+            }
+
+            function showNotification(message, type) {
+                // Create notification element
+                const notification = document.createElement('div');
+                notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+                notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; max-width: 500px;';
+                notification.innerHTML = `
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                
+                // Add to page
+                document.body.appendChild(notification);
+                
+                // Auto remove after 8 seconds
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                }, 8000);
+            }
+
+            function showMqttCommand() {
+                const commandDisplay = document.getElementById('mqtt-command-display');
+                if (commandDisplay.style.display === 'none') {
+                    commandDisplay.style.display = 'block';
+                } else {
+                    commandDisplay.style.display = 'none';
+                }
+            }
         </script>
     @else
         <!-- Webhook Device Script - No real-time connection needed -->
@@ -274,6 +363,13 @@
             });
 
             function initializeMap() {
+                // Check if map container exists before initializing
+                const mapContainer = document.getElementById('map');
+                if (!mapContainer) {
+                    console.log('Map container not found, skipping map initialization');
+                    return;
+                }
+
                 // Initialize map with default location
                 map = L.map('map').setView([38.2466, 21.7346], 10);
 
