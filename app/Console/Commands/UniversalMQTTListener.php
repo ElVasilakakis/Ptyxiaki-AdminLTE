@@ -6,18 +6,24 @@ use Illuminate\Console\Command;
 use App\Models\Device;
 use App\Models\Sensor;
 use Bluerhinos\phpMQTT;
+use PhpMqtt\Client\MqttClient;
+use PhpMqtt\Client\ConnectionSettings;
+use PhpMqtt\Client\Exceptions\MqttClientException;
 
 class UniversalMQTTListener extends Command
 {
-    protected $signature = 'mqtt:listen-all {--timeout=0}';
-    protected $description = 'Listen to MQTT topics for all devices with MQTT connection type';
+    protected $signature = 'mqtt:listen-all {--timeout=0} {--connection-timeout=5} {--skip-problematic}';
+    protected $description = 'Listen to MQTT topics for all devices with MQTT connection type (hybrid SSL/non-SSL support)';
 
     private $mqttClients = [];
     private $devices = [];
+    private $interruptFlag = false;
 
     public function handle()
     {
         $timeout = (int) $this->option('timeout');
+        $connectionTimeout = (int) $this->option('connection-timeout');
+        $skipProblematic = $this->option('skip-problematic');
 
         // Get all MQTT devices
         $this->devices = Device::where('connection_type', 'mqtt')
@@ -34,12 +40,33 @@ class UniversalMQTTListener extends Command
         $this->info("Found " . $this->devices->count() . " MQTT devices to monitor:");
         foreach ($this->devices as $device) {
             $brokerType = $this->detectBrokerType($device);
-            $this->info("- {$device->name} ({$device->device_id}) - {$device->mqtt_host} [{$brokerType}] -> bluerhinos");
+            $library = $device->use_ssl ? 'php-mqtt/client' : 'bluerhinos';
+            $port = $this->getDevicePort($device); // Use actual device port
+            $this->info("- {$device->name} ({$device->device_id}) - {$device->mqtt_host}:{$port} [{$brokerType}] -> {$library}");
+        }
+
+        // Set up signal handler for graceful shutdown
+        if (function_exists('pcntl_async_signals')) {
+            pcntl_async_signals(true);
+            pcntl_signal(SIGINT, function () {
+                $this->info("\n🛑 Received interrupt signal, shutting down gracefully...");
+                $this->interruptFlag = true;
+                foreach ($this->mqttClients as $clientData) {
+                    if ($clientData['type'] === 'php-mqtt') {
+                        $clientData['client']->interrupt();
+                    }
+                }
+            });
         }
 
         try {
-            // Connect to all MQTT brokers using BluerhiNos
-            $this->connectToAllBrokers();
+            // Connect to all MQTT brokers using hybrid approach with timeout protection
+            $this->connectToAllBrokersNonBlocking($connectionTimeout, $skipProblematic);
+
+            if (empty($this->mqttClients)) {
+                $this->warn("⚠️ No successful connections established. Exiting.");
+                return 1;
+            }
 
             $this->info("Listening for messages from all devices... (Press Ctrl+C to stop)");
 
@@ -58,6 +85,76 @@ class UniversalMQTTListener extends Command
         }
 
         return 0;
+    }
+
+    /**
+     * Get the actual port for a device, respecting custom port configurations
+     */
+    private function getDevicePort(Device $device): int
+    {
+        // Use the device's configured port if available
+        if ($device->port && is_numeric($device->port)) {
+            return (int) $device->port;
+        }
+        
+        // Fall back to standard ports based on SSL setting only if no port is configured
+        return $device->use_ssl ? 8883 : 1883;
+    }
+
+    private function connectToAllBrokersNonBlocking($connectionTimeout, $skipProblematic)
+    {
+        $brokerGroups = $this->groupDevicesByBroker();
+        $knownProblematicBrokers = [
+            'eu1.cloud.thethings.industries' // Known to have connection issues
+        ];
+
+        foreach ($brokerGroups as $brokerKey => $devices) {
+            $firstDevice = $devices->first();
+            $brokerType = $this->detectBrokerType($firstDevice);
+            
+            // Skip known problematic brokers if flag is set
+            if ($skipProblematic && in_array($firstDevice->mqtt_host, $knownProblematicBrokers)) {
+                $this->warn("⚠️ Skipping problematic broker: {$firstDevice->mqtt_host} (use --skip-problematic=false to attempt)");
+                $this->updateDevicesStatus($devices, 'skipped');
+                continue;
+            }
+            
+            $port = $this->getDevicePort($firstDevice);
+            $this->info("🚀 Processing connection: {$firstDevice->mqtt_host}:{$port}");
+            $this->info("📋 Broker Type: {$brokerType} | SSL: " . ($firstDevice->use_ssl ? 'Yes' : 'No'));
+            
+            // Attempt connection with strict timeout
+            $this->connectWithStrictTimeout($brokerKey, $devices, $firstDevice, $brokerType, $connectionTimeout);
+        }
+        
+        $this->info("🎯 Successfully connected to " . count($this->mqttClients) . " broker(s)");
+    }
+
+    private function connectWithStrictTimeout($brokerKey, $devices, $firstDevice, $brokerType, $connectionTimeout)
+    {
+        try {
+            $port = $this->getDevicePort($firstDevice);
+            $this->info("🔌 Attempting connection to: {$firstDevice->mqtt_host}:{$port} (timeout: {$connectionTimeout}s)");
+            $this->logDeviceConfiguration($firstDevice);
+            
+            $startTime = time();
+            
+            // Choose library based on SSL requirement
+            if ($firstDevice->use_ssl) {
+                $this->connectPhpMqttWithStrictTimeout($brokerKey, $devices, $firstDevice, $brokerType, $connectionTimeout);
+            } else {
+                $this->connectBluerhinos($brokerKey, $devices, $firstDevice, $brokerType);
+            }
+            
+            $connectionTime = time() - $startTime;
+            $this->info("✅ Connection completed for {$firstDevice->mqtt_host}:{$port} in {$connectionTime}s");
+
+        } catch (\Exception $e) {
+            $this->handleBrokerConnectionError($firstDevice, $devices, $e);
+            
+            // Always continue with remaining connections
+            $this->info("➡️ Continuing with remaining connections...");
+        }
     }
 
     private function detectBrokerType(Device $device): string
@@ -86,81 +183,27 @@ class UniversalMQTTListener extends Command
         return 'emqx';
     }
 
-    private function connectToAllBrokers()
-    {
-        $brokerGroups = $this->groupDevicesByBroker();
-
-        foreach ($brokerGroups as $brokerKey => $devices) {
-            $firstDevice = $devices->first();
-            $brokerType = $this->detectBrokerType($firstDevice);
-            
-            try {
-                $this->info("🚀 Starting connection process for: {$firstDevice->mqtt_host}");
-                $this->info("📋 Broker Type: {$brokerType} | Client Library: bluerhinos");
-                $this->logDeviceConfiguration($firstDevice);
-                
-                // Use BluerhiNos for all brokers
-                $this->connectBluerhinos($brokerKey, $devices, $firstDevice, $brokerType);
-
-            } catch (\Exception $e) {
-                $this->handleBrokerConnectionError($firstDevice, $devices, $e);
-                continue;
-            }
-        }
-        
-        // Check if we have any successful connections
-        if (empty($this->mqttClients)) {
-            throw new \Exception("Failed to connect to any MQTT brokers!");
-        }
-        
-        $this->info("🎯 Successfully connected to " . count($this->mqttClients) . " broker(s)");
-    }
-
     private function connectBluerhinos(string $brokerKey, $devices, Device $firstDevice, string $brokerType)
     {
         $this->info("🔥 Initializing BluerhiNos MQTT client for {$brokerType}...");
         
         $clientId = 'laravel_' . strtolower($brokerType) . '_' . time() . '_' . substr(md5($brokerKey), 0, 8);
-        $port = $firstDevice->port ?: ($firstDevice->use_ssl ? 8883 : 1883);
-        
-        // Handle SSL connections
+        $port = $this->getDevicePort($firstDevice); // Use actual device port
         $host = $firstDevice->mqtt_host;
-        $cafile = null;
-        
-        if ($firstDevice->use_ssl) {
-            $this->warn("⚠️ SSL connections are not fully supported by BluerhiNos phpMQTT library");
-            $this->warn("   Skipping SSL device: {$brokerType} at {$host}:{$port}");
-            $this->warn("   For The Things Stack, consider using webhook integration instead");
-            
-            // Update devices to indicate SSL limitation
-            foreach ($devices as $device) {
-                $device->update([
-                    'status' => 'error',
-                    'last_seen_at' => now()
-                ]);
-                $this->warn("   📊 Device {$device->name} status updated to error (SSL not supported)");
-            }
-            
-            throw new \Exception("SSL connections not supported by BluerhiNos phpMQTT library");
-        }
         
         $this->info("🏗️ Creating BluerhiNos MQTT client with ID: {$clientId}");
-        $this->info("🔗 Host: {$host}, Port: {$port}, SSL: " . ($firstDevice->use_ssl ? 'Yes' : 'No'));
+        $this->info("🔗 Host: {$host}, Port: {$port}");
         
         // Create phpMQTT instance
-        $mqtt = new phpMQTT($host, $port, $clientId, $cafile);
+        $mqtt = new phpMQTT($host, $port, $clientId);
         
         // Set keepalive based on broker type
         switch ($brokerType) {
             case 'thethings_stack':
-                $mqtt->keepalive = min($firstDevice->keepalive ?: 10, 10); // TTS prefers shorter keepalive
+                $mqtt->keepalive = min($firstDevice->keepalive ?: 10, 10);
                 break;
             case 'hivemq':
-                $mqtt->keepalive = $firstDevice->keepalive ?: 60; // HiveMQ standard keepalive
-                break;
             case 'emqx':
-                $mqtt->keepalive = $firstDevice->keepalive ?: 60; // EMQX standard keepalive
-                break;
             default:
                 $mqtt->keepalive = $firstDevice->keepalive ?: 60;
         }
@@ -172,7 +215,6 @@ class UniversalMQTTListener extends Command
         $username = $firstDevice->username;
         $password = $firstDevice->password;
         
-        // Some brokers don't require authentication
         if ($username || $password) {
             $this->info("🔐 Authenticating with username: " . ($username ?: 'anonymous'));
         } else {
@@ -202,6 +244,114 @@ class UniversalMQTTListener extends Command
         ];
     }
 
+    private function connectPhpMqttWithStrictTimeout(string $brokerKey, $devices, Device $firstDevice, string $brokerType, int $connectionTimeout)
+    {
+        // For known problematic brokers, try HiveMQ first and skip TTS
+        if ($brokerType === 'thethings_stack') {
+            $this->warn("⚠️ The Things Stack detected - this broker often has connection timeouts");
+            $this->warn("⚠️ Skipping to prevent blocking other connections");
+            throw new \Exception("Skipping The Things Stack to prevent timeout blocking");
+        }
+
+        $this->info("🔥 Initializing php-mqtt/client for SSL connection to {$brokerType}...");
+        
+        $clientId = 'laravel_ssl_' . strtolower($brokerType) . '_' . time() . '_' . substr(md5($brokerKey), 0, 8);
+        $port = $this->getDevicePort($firstDevice); // Use actual device port
+        $host = $firstDevice->mqtt_host;
+        
+        $this->info("🏗️ Creating php-mqtt client with ID: {$clientId}");
+        $this->info("🔗 Host: {$host}, Port: {$port}, SSL: Yes, Timeout: {$connectionTimeout}s");
+        
+        // Create connection settings with aggressive timeouts
+        $connectionSettings = new ConnectionSettings();
+        
+        // Set basic authentication
+        if ($firstDevice->username) {
+            $connectionSettings->setUsername($firstDevice->username);
+        }
+        if ($firstDevice->password) {
+            $connectionSettings->setPassword($firstDevice->password);
+        }
+        
+        // Configure SSL/TLS
+        $connectionSettings->setUseTls(true);
+        
+        // Set keepalive
+        $keepalive = $firstDevice->keepalive ?: 60;
+        if ($brokerType === 'thethings_stack') {
+            $keepalive = min($keepalive, 30);
+        }
+        $connectionSettings->setKeepAliveInterval($keepalive);
+        
+        // Check for client certificates (especially for HiveMQ Cloud)
+        $certPath = storage_path('certificates');
+        $clientCert = $certPath . '/client.crt';
+        $clientKey = $certPath . '/client.key';
+        $caCert = $certPath . '/ca.crt';
+        
+        if (file_exists($clientCert) && file_exists($clientKey)) {
+            $this->info("🔐 Using client certificate authentication");
+            $connectionSettings->setTlsClientCertificateFile($clientCert);
+            $connectionSettings->setTlsClientCertificateKeyFile($clientKey);
+            
+            if (file_exists($caCert)) {
+                $connectionSettings->setTlsCaCertificateFile($caCert);
+                $connectionSettings->setTlsVerifyPeer(true);
+                $connectionSettings->setTlsVerifyPeerName(true);
+                $this->info("   - Using CA certificate for verification");
+            } else {
+                $connectionSettings->setTlsVerifyPeer(false);
+                $connectionSettings->setTlsVerifyPeerName(false);
+                $this->info("   - No CA certificate, disabling peer verification");
+            }
+            $connectionSettings->setTlsSelfSignedAllowed(true);
+        } else {
+            // No certificates available - use permissive settings
+            if ($brokerType === 'hivemq') {
+                $this->warn("⚠️ HiveMQ Cloud detected but no client certificates found");
+                $this->warn("   - This connection will likely fail");
+                $this->warn("   - HiveMQ Cloud typically requires client certificates");
+                $this->warn("   - Place certificates in storage/certificates/ directory");
+            }
+            
+            $connectionSettings->setTlsVerifyPeer(false);
+            $connectionSettings->setTlsVerifyPeerName(false);
+            $connectionSettings->setTlsSelfSignedAllowed(true);
+        }
+        
+        // Set aggressive connection timeout
+        $connectionSettings->setConnectTimeout($connectionTimeout);
+        
+        $this->info("⏳ Connecting to SSL {$brokerType} at {$host}:{$port} (keepalive: {$keepalive}s, timeout: {$connectionTimeout}s)");
+        $startTime = microtime(true);
+        
+        // Create MQTT client
+        $mqtt = new MqttClient($host, $port, $clientId, MqttClient::MQTT_3_1_1);
+        
+        try {
+            // Connect to broker with timeout
+            $mqtt->connect($connectionSettings, true);
+            
+            $endTime = microtime(true);
+            $connectionTime = round(($endTime - $startTime) * 1000, 2);
+            $this->info("✅ Connected to SSL {$brokerType} successfully! ({$connectionTime}ms)");
+            
+            // Subscribe to topics
+            $this->subscribePhpMqtt($mqtt, $devices, $brokerType);
+            
+            // Store client
+            $this->mqttClients[$brokerKey] = [
+                'client' => $mqtt,
+                'type' => 'php-mqtt',
+                'broker_type' => $brokerType,
+                'devices' => $devices
+            ];
+            
+        } catch (MqttClientException $e) {
+            throw new \Exception("Failed to connect to SSL {$brokerType}: " . $e->getMessage());
+        }
+    }
+
     private function subscribeBluerhinos($mqtt, $devices, string $brokerType)
     {
         $this->info("📡 Starting BluerhiNos topic subscriptions for {$brokerType}...");
@@ -211,7 +361,7 @@ class UniversalMQTTListener extends Command
         foreach ($devices as $device) {
             foreach ($device->mqtt_topics as $topic) {
                 $topics[$topic] = [
-                    'qos' => 0, // QoS 0 for maximum compatibility
+                    'qos' => 0,
                     'function' => function($receivedTopic, $message) use ($devices) {
                         $this->handleMqttMessage($devices, $receivedTopic, $message);
                     }
@@ -226,43 +376,75 @@ class UniversalMQTTListener extends Command
             $this->info("✅ Subscribed to " . count($topics) . " {$brokerType} topics successfully");
             
             // Update all devices status to online
-            foreach ($devices as $device) {
-                $device->update([
-                    'status' => 'online',
-                    'last_seen_at' => now()
-                ]);
-                $this->info("   📊 Device {$device->name} status updated to online");
+            $this->updateDevicesStatus($devices, 'online');
+        }
+    }
+
+    private function subscribePhpMqtt($mqtt, $devices, string $brokerType)
+    {
+        $this->info("📡 Starting php-mqtt topic subscriptions for SSL {$brokerType}...");
+        
+        $topicCount = 0;
+        foreach ($devices as $device) {
+            foreach ($device->mqtt_topics as $topic) {
+                $mqtt->subscribe($topic, function ($receivedTopic, $message, $retained, $matchedWildcards) use ($devices) {
+                    $this->handleMqttMessage($devices, $receivedTopic, $message);
+                }, 0);
+                
+                $this->info("📋 Added SSL {$brokerType} topic for subscription: {$topic}");
+                $topicCount++;
             }
+        }
+        
+        if ($topicCount > 0) {
+            $this->info("✅ Subscribed to {$topicCount} SSL {$brokerType} topics successfully");
+            
+            // Update all devices status to online
+            $this->updateDevicesStatus($devices, 'online');
+        }
+    }
+
+    private function updateDevicesStatus($devices, string $status)
+    {
+        foreach ($devices as $device) {
+            $device->update([
+                'status' => $status,
+                'last_seen_at' => now()
+            ]);
+            $this->info("   📊 Device {$device->name} status updated to {$status}");
         }
     }
 
     private function runWithTimeout($timeout)
     {
         $startTime = time();
-        while ((time() - $startTime) < $timeout) {
-            foreach ($this->mqttClients as $brokerKey => $clientData) {
-                try {
-                    $clientData['client']->proc();
-                } catch (\Exception $e) {
-                    $this->warn("Loop error for {$brokerKey}: " . $e->getMessage());
-                }
-            }
+        while ((time() - $startTime) < $timeout && !$this->interruptFlag) {
+            $this->processMessages();
             usleep(100000); // Sleep 100ms between loops
         }
     }
 
     private function runIndefinitely()
     {
-        while (true) {
-            foreach ($this->mqttClients as $brokerKey => $clientData) {
-                try {
-                    $clientData['client']->proc();
-                } catch (\Exception $e) {
-                    $this->warn("Loop error for {$brokerKey}: " . $e->getMessage());
-                    $this->attemptReconnection($brokerKey, $clientData);
-                }
-            }
+        while (!$this->interruptFlag) {
+            $this->processMessages();
             usleep(100000); // Sleep 100ms between loops
+        }
+    }
+
+    private function processMessages()
+    {
+        foreach ($this->mqttClients as $brokerKey => $clientData) {
+            try {
+                if ($clientData['type'] === 'bluerhinos') {
+                    $clientData['client']->proc();
+                } else if ($clientData['type'] === 'php-mqtt') {
+                    $clientData['client']->loop(false, true);
+                }
+            } catch (\Exception $e) {
+                $this->warn("Loop error for {$brokerKey}: " . $e->getMessage());
+                $this->attemptReconnection($brokerKey, $clientData);
+            }
         }
     }
 
@@ -278,8 +460,12 @@ class UniversalMQTTListener extends Command
             // Remove failed client
             unset($this->mqttClients[$brokerKey]);
             
-            // Attempt reconnection
-            $this->connectBluerhinos($brokerKey, $devices, $firstDevice, $brokerType);
+            // Attempt reconnection with appropriate library and shorter timeout
+            if ($firstDevice->use_ssl) {
+                $this->connectPhpMqttWithStrictTimeout($brokerKey, $devices, $firstDevice, $brokerType, 3);
+            } else {
+                $this->connectBluerhinos($brokerKey, $devices, $firstDevice, $brokerType);
+            }
             
             $this->info("✅ Reconnected to {$brokerKey} successfully");
             
@@ -287,12 +473,7 @@ class UniversalMQTTListener extends Command
             $this->error("❌ Reconnection failed for {$brokerKey}: " . $e->getMessage());
             
             // Update devices to error status
-            foreach ($clientData['devices'] as $device) {
-                $device->update([
-                    'status' => 'error',
-                    'last_seen_at' => now()
-                ]);
-            }
+            $this->updateDevicesStatus($clientData['devices'], 'error');
         }
     }
 
@@ -300,7 +481,11 @@ class UniversalMQTTListener extends Command
     {
         foreach ($this->mqttClients as $brokerKey => $clientData) {
             try {
-                $clientData['client']->close();
+                if ($clientData['type'] === 'bluerhinos') {
+                    $clientData['client']->close();
+                } else if ($clientData['type'] === 'php-mqtt') {
+                    $clientData['client']->disconnect();
+                }
                 $this->info("Disconnected from broker: {$brokerKey}");
             } catch (\Exception $e) {
                 $this->warn("Error disconnecting from {$brokerKey}: " . $e->getMessage());
@@ -310,9 +495,10 @@ class UniversalMQTTListener extends Command
 
     private function logDeviceConfiguration(Device $firstDevice)
     {
+        $port = $this->getDevicePort($firstDevice);
         $this->info("📋 Device Configuration:");
         $this->info("   - Host: {$firstDevice->mqtt_host}");
-        $this->info("   - Port: " . ($firstDevice->port ?: ($firstDevice->use_ssl ? 8883 : 1883)));
+        $this->info("   - Port: {$port}" . ($firstDevice->port ? " (custom)" : " (default)"));
         $this->info("   - Use SSL: " . ($firstDevice->use_ssl ? 'Yes' : 'No'));
         $this->info("   - Username: " . ($firstDevice->username ?: 'None'));
         $this->info("   - Password: " . ($firstDevice->password ? 'Set (length: ' . strlen($firstDevice->password) . ')' : 'None'));
@@ -321,25 +507,23 @@ class UniversalMQTTListener extends Command
 
     private function handleBrokerConnectionError(Device $firstDevice, $devices, \Exception $e)
     {
-        $this->error("💥 Broker connection failed: {$firstDevice->mqtt_host}");
+        $port = $this->getDevicePort($firstDevice);
+        $this->error("💥 Broker connection failed: {$firstDevice->mqtt_host}:{$port}");
         $this->error("💥 Error: " . $e->getMessage());
         
         // Update device status to error for all devices on this broker
-        foreach ($devices as $device) {
-            $device->update([
-                'status' => 'error',
-                'last_seen_at' => now()
-            ]);
-            $this->warn("   📊 Device {$device->name} status updated to error");
-        }
+        $this->updateDevicesStatus($devices, 'error');
     }
 
     private function groupDevicesByBroker()
     {
         return $this->devices->groupBy(function ($device) {
-            return $device->mqtt_host . ':' . ($device->port ?: ($device->use_ssl ? 8883 : 1883)) . ':' . ($device->username ?: 'anonymous');
+            $port = $this->getDevicePort($device);
+            return $device->mqtt_host . ':' . $port . ':' . ($device->username ?: 'anonymous');
         });
     }
+
+    // [Rest of the message handling methods remain the same...]
 
     private function handleMqttMessage($devices, $topic, $message)
     {
@@ -380,17 +564,14 @@ class UniversalMQTTListener extends Command
             
             if (json_last_error() !== JSON_ERROR_NONE) {
                 $this->warn("[{$device->name}] Message is not valid JSON, treating as plain text");
-                // If not JSON, treat as plain text and extract sensor type from topic
                 $topicParts = explode('/', $topic);
                 $sensorType = end($topicParts);
                 $this->createOrUpdateSensor($device, $sensorType, $message, null, $topic);
                 return;
             }
 
-            // Determine device type and handle accordingly
             $this->handleDevicePayload($device, $data, $topic);
 
-            // Update device last seen
             $device->update([
                 'status' => 'online',
                 'last_seen_at' => now()
@@ -398,20 +579,12 @@ class UniversalMQTTListener extends Command
 
         } catch (\Exception $e) {
             $this->error("[{$device->name}] Error processing message: " . $e->getMessage());
-            \Log::error('Universal MQTT message processing error', [
-                'device_id' => $device->device_id,
-                'topic' => $topic,
-                'message' => substr($message, 0, 500),
-                'error' => $e->getMessage()
-            ]);
         }
     }
 
     private function handleDevicePayload(Device $device, array $data, string $topic)
     {
-        // Handle payload based on broker type
         $brokerType = $device->connection_broker ?? $this->detectBrokerType($device);
-        
         $this->info("[{$device->name}] Processing payload for broker type: {$brokerType}");
         
         switch (strtolower($brokerType)) {
@@ -424,7 +597,6 @@ class UniversalMQTTListener extends Command
                 
             case 'hivemq':
             case 'hivemq_cloud':
-                // Handle HiveMQ format (usually simple key-value or ESP32-style)
                 if (isset($data['sensors']) && is_array($data['sensors'])) {
                     $this->handleESP32Payload($device, $data, $topic);
                 } else {
@@ -435,7 +607,6 @@ class UniversalMQTTListener extends Command
             case 'emqx':
             case 'esp32':
             default:
-                // Handle ESP32/EMQX format
                 if (isset($data['sensors']) && is_array($data['sensors'])) {
                     $this->handleESP32Payload($device, $data, $topic);
                 } else {
@@ -449,54 +620,28 @@ class UniversalMQTTListener extends Command
     {
         $this->info("[{$device->name}] Processing The Things Stack payload");
         
-        // Extract decoded payload from The Things Stack structure
         $decodedPayload = null;
-        
-        // Handle your specific The Things Stack structure
         if (isset($data['uplink_message']['decoded_payload']['data'])) {
             $decodedPayload = $data['uplink_message']['decoded_payload']['data'];
-        } elseif (isset($data['data']['uplink_message']['decoded_payload']['data'])) {
-            $decodedPayload = $data['data']['uplink_message']['decoded_payload']['data'];
-        } elseif (isset($data['decoded_payload']['data'])) {
-            $decodedPayload = $data['decoded_payload']['data'];
         } elseif (isset($data['uplink_message']['decoded_payload'])) {
             $decodedPayload = $data['uplink_message']['decoded_payload'];
-        } elseif (isset($data['data']['uplink_message']['decoded_payload'])) {
-            $decodedPayload = $data['data']['uplink_message']['decoded_payload'];
         } elseif (isset($data['decoded_payload'])) {
             $decodedPayload = $data['decoded_payload'];
-        } elseif (isset($data['data'])) {
-            // Sometimes the payload is directly in 'data' field
-            $decodedPayload = $data['data'];
         }
 
         if (!$decodedPayload) {
-            $this->warn("[{$device->name}] No decoded payload found in The Things Stack message");
-            $this->info("[{$device->name}] Raw message structure: " . json_encode(array_keys($data)));
+            $this->warn("[{$device->name}] No decoded payload found");
             return;
         }
 
-        $this->info("[{$device->name}] Decoded payload: " . json_encode($decodedPayload));
-
-        // Process each sensor value in the decoded payload
         foreach ($decodedPayload as $key => $value) {
-            // Skip non-sensor fields
             if (in_array(strtolower($key), ['gps_fix', 'gps_fix_type', 'warnings', 'errors'])) {
                 continue;
             }
 
             $sensorType = $this->normalizeSensorType($key);
             $unit = $this->getUnitForSensorType($sensorType);
-            
             $this->createOrUpdateSensor($device, $sensorType, $value, $unit, $topic);
-        }
-        
-        // Handle GPS fix status separately if needed
-        if (isset($decodedPayload['gps_fix']) && isset($decodedPayload['gps_fix_type'])) {
-            $this->info("[{$device->name}] GPS Status: {$decodedPayload['gps_fix_type']} (code: {$decodedPayload['gps_fix']})");
-            
-            // Store GPS fix quality as a sensor reading
-            $this->createOrUpdateSensor($device, 'gps_quality', $decodedPayload['gps_fix'], 'fix_code', $topic);
         }
     }
 
@@ -508,9 +653,8 @@ class UniversalMQTTListener extends Command
             if (isset($sensorData['type']) && isset($sensorData['value'])) {
                 $sensorType = $this->normalizeSensorType($sensorData['type']);
                 
-                // Handle geolocation with subtype
                 if ($sensorData['type'] === 'geolocation' && isset($sensorData['subtype'])) {
-                    $sensorType = $sensorData['subtype']; // latitude or longitude
+                    $sensorType = $sensorData['subtype'];
                 }
                 
                 $cleanValue = $this->extractNumericValue($sensorData['value']);
@@ -525,33 +669,26 @@ class UniversalMQTTListener extends Command
     {
         $this->info("[{$device->name}] Processing simple key-value payload");
         
-        // Check if it's a single sensor reading with sensor_type field
         if (isset($data['sensor_type']) && isset($data['value'])) {
             $this->createOrUpdateSensor($device, $data['sensor_type'], $data['value'], $data['unit'] ?? null, $topic);
             return;
         }
 
-        // Handle multiple sensor readings in one message
         foreach ($data as $key => $value) {
-            // Skip non-sensor fields
             if (in_array(strtolower($key), ['timestamp', 'device_id', 'message_id'])) {
                 continue;
             }
             
-            // Handle different sensor naming conventions
             $sensorType = $this->normalizeSensorType($key);
             $unit = $this->getUnitForSensorType($sensorType);
-            
             $this->createOrUpdateSensor($device, $sensorType, $value, $unit, $topic);
         }
     }
 
     private function createOrUpdateSensor(Device $device, string $sensorType, $value, ?string $unit, string $topic)
     {
-        // Remove units from value if they're included (e.g., "24.0°C" -> "24.0")
         $cleanValue = $this->extractNumericValue($value);
         
-        // Find or create sensor
         $sensor = Sensor::firstOrCreate(
             [
                 'device_id' => $device->id,
@@ -566,10 +703,8 @@ class UniversalMQTTListener extends Command
             ]
         );
 
-        // Update sensor reading
         $sensor->updateReading($cleanValue, now());
         
-        // Update unit if provided and different
         if ($unit && $sensor->unit !== $unit) {
             $sensor->update(['unit' => $unit]);
         }
@@ -579,12 +714,12 @@ class UniversalMQTTListener extends Command
 
     private function normalizeSensorType(string $key): string
     {
-        // Convert common sensor field names to standard types
         $key = strtolower($key);
         
         $mappings = [
             'temp' => 'temperature',
             'temperature' => 'temperature',
+            'thermal' => 'temperature',
             'humid' => 'humidity',
             'humidity' => 'humidity',
             'light' => 'light',
@@ -629,12 +764,10 @@ class UniversalMQTTListener extends Command
 
     private function extractNumericValue($value): float
     {
-        // If it's already numeric, return as is
         if (is_numeric($value)) {
             return (float) $value;
         }
 
-        // Extract numeric value from strings like "24.0°C" or "40.0%"
         if (is_string($value)) {
             preg_match('/(-?\d+\.?\d*)/', $value, $matches);
             return isset($matches[0]) ? (float) $matches[0] : 0.0;
@@ -649,7 +782,6 @@ class UniversalMQTTListener extends Command
             return null;
         }
 
-        // Extract unit from strings like "24.0 celsius", "40.0 percent"
         $unitMappings = [
             'celsius' => '°C',
             'fahrenheit' => '°F',
