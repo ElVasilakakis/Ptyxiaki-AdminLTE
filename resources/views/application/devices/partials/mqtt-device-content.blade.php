@@ -7,11 +7,6 @@
         </div>
     </div>
     <div class="d-flex gap-2 align-items-center">
-        @if($device->mqtt_host && $device->mqtt_topics && count($device->mqtt_topics) > 0)
-            <button type="button" class="btn btn-success btn-sm" onclick="startMqttListener()">
-                <i class="ph-play me-1"></i>Start Listener
-            </button>
-        @endif
         <span class="badge bg-info bg-opacity-10 text-info">
             <i class="ph-broadcast me-1"></i>
             MQTT
