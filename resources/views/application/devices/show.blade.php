@@ -243,7 +243,15 @@
 
             function refreshSensorData() {
                 // MQTT devices can have more frequent updates
-                fetch(`/api/devices/{{ $device->id }}/sensors`)
+                fetch(`/app/devices/{{ $device->id }}/sensor-data`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
+                })
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a6a9cd49e2cfded2c71c8fc7b57f87f6",
+    "content-hash": "b65cd511a297ebe34fdcfe08412c29a9",
     "packages": [
         {
             "name": "bluerhinos/phpmqtt",
@@ -8671,9 +8671,7 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "bluerhinos/phpmqtt": 20
-    },
+    "stability-flags": {},
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
