@@ -86,7 +86,7 @@
                                 
                                 <div class="row mb-4">
                                     <div class="col-md-4">
-                                        <div class="card border-info">
+                                            <div class="card border-info">
                                             <div class="card-header bg-info text-white">
                                                 <h6 class="mb-0">🔧 MQTT Devices</h6>
                                             </div>
@@ -96,10 +96,13 @@
                                                 <ul class="mb-0 small">
                                                     <li>Device ID: unique name</li>
                                                     <li>Connection Type: MQTT</li>
-                                                    <li>MQTT Host: test.mosquitto.org</li>
+                                                    <li>MQTT Host: test.mosquitto.org or broker.emqx.io</li>
                                                     <li>Port: 1883</li>
                                                     <li>Topic: where device sends data</li>
                                                 </ul>
+                                                <div class="alert alert-warning mt-2 mb-0">
+                                                    <small><strong>Note:</strong> EMQX only supports public servers without authentication. Use Mosquitto for production with credentials.</small>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

@@ -44,7 +44,7 @@ class DevicesController extends Controller
             // Connection fields
             'client_id' => 'nullable|string|max:255',
             'use_ssl' => 'boolean',
-            'connection_broker' => 'nullable|in:mosquitto',
+            'connection_broker' => 'nullable|in:mosquitto,emqx',
             'port' => 'nullable|integer|min:1|max:65535',
             'username' => 'nullable|string|max:255',
             'password' => 'nullable|string|max:255',
