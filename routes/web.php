@@ -33,61 +33,39 @@ Route::get('/', function () {
     return redirect('/app/dashboard');
 });
 
-// Add this route for testing MQTT on Ploi server
-Route::get('/test-mqtt', function () {
-    try {
-
+// Add to routes/web.php
+Route::get('/test-mqtt-simple', function () {
+    set_time_limit(30); // Prevent timeout
+    
+    $output = "=== Quick MQTT Broker Test ===\n";
+    
+    // Test multiple brokers
+    $brokers = [
+        'test.mosquitto.org' => 1883,
+        'mqtt.eclipseprojects.io' => 1883,
+        'broker.hivemq.com' => 1883,
+        'broker.emqx.io' => 1883
+    ];
+    
+    foreach ($brokers as $host => $port) {
+        $output .= "\nTesting {$host}:{$port}...\n";
         
-        $output = "=== MQTT Test from Ploi Server ===\n";
-        $output .= "Server: " . request()->getHost() . "\n";
-        $output .= "Time: " . now() . "\n\n";
-        
-        // Test EMQX connection
-        $connectionSettings = (new ConnectionSettings())
-            ->setUsername('mqttuser')
-            ->setPassword('12345678')
-            ->setConnectTimeout(10);
-        
-        $mqtt = new MqttClient('broker.emqx.io', 1883, 'ploi-test-' . time());
-        
-        $mqtt->connect($connectionSettings, true);
-        $output .= "✅ Connected to EMQX successfully!\n\n";
-        
-        // Test simple subscription
-        $testTopic = 'ploi/test/' . time();
-        $output .= "📡 Subscribed to: {$testTopic}\n";
-        $output .= "Publish a message to this topic from MQTTX!\n\n";
-        
-        $messageReceived = false;
-        $mqtt->subscribe($testTopic, function($topic, $message) use (&$messageReceived, &$output) {
-            $output .= "📨 RECEIVED MESSAGE!\n";
-            $output .= "Topic: {$topic}\n";
-            $output .= "Message: {$message}\n";
-            $messageReceived = true;
-        }, 0);
-        
-        // Listen for 10 seconds
-        $start = time();
-        while ((time() - $start) < 10 && !$messageReceived) {
-            $mqtt->loop(true);
-            usleep(100000);
+        try {
+            $socket = @fsockopen($host, $port, $errno, $errstr, 5);
+            if ($socket) {
+                $output .= "✅ {$host} - Socket connection OK\n";
+                fclose($socket);
+            } else {
+                $output .= "❌ {$host} - Failed: {$errno} - {$errstr}\n";
+            }
+        } catch (\Exception $e) {
+            $output .= "❌ {$host} - Exception: " . $e->getMessage() . "\n";
         }
-        
-        if ($messageReceived) {
-            $output .= "✅ SUCCESS! Server can receive MQTT messages!\n";
-        } else {
-            $output .= "❌ No messages received in 10 seconds\n";
-        }
-        
-        $mqtt->disconnect();
-        
-    } catch (\Exception $e) {
-        $output .= "❌ Error: " . $e->getMessage() . "\n";
-        $output .= "Stack trace: " . $e->getTraceAsString() . "\n";
     }
     
     return response($output)->header('Content-Type', 'text/plain');
 });
+
 
 
 // Application Routes (Protected by authentication)
