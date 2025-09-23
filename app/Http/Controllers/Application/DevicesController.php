@@ -44,7 +44,7 @@ class DevicesController extends Controller
             // Connection fields
             'client_id' => 'nullable|string|max:255',
             'use_ssl' => 'boolean',
-            'connection_broker' => 'nullable|in:emqx,hivemq,thethings_stack',
+            'connection_broker' => 'nullable|in:emqx,hivemq,mosquitto,thethings_stack',
             'port' => 'nullable|integer|min:1|max:65535',
             'username' => 'nullable|string|max:255',
             'password' => 'nullable|string|max:255',
@@ -168,7 +168,7 @@ class DevicesController extends Controller
             // Connection fields
             'client_id' => 'nullable|string|max:255',
             'use_ssl' => 'boolean',
-            'connection_broker' => 'nullable|in:emqx,hivemq,thethings_stack',
+            'connection_broker' => 'nullable|in:emqx,hivemq,mosquitto,thethings_stack',
             'port' => 'nullable|integer|min:1|max:65535',
             'username' => 'nullable|string|max:255',
             'password' => 'nullable|string|max:255',

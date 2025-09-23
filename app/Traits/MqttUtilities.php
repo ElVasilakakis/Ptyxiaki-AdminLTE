@@ -97,6 +97,16 @@ trait MqttUtilities
         if (str_contains($host, 'emqx')) {
             return 'emqx';
         }
+        
+        if (str_contains($host, 'mosquitto') || str_contains($host, 'eclipse-mosquitto')) {
+            return 'mosquitto';
+        }
+        
+        // Check for common Mosquitto broker hostnames/IPs
+        if (str_contains($host, 'localhost') || str_contains($host, '127.0.0.1') || 
+            str_contains($host, 'test.mosquitto.org') || str_contains($host, 'broker.mqttdashboard.com')) {
+            return 'mosquitto';
+        }
 
         // Default fallback
         return 'emqx';

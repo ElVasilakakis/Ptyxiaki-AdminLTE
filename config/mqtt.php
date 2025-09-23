@@ -79,6 +79,15 @@ return [
             'library' => 'auto', // Auto-select based on SSL
             'connection_timeout' => 10,
         ],
+        'mosquitto' => [
+            'library' => 'auto', // Auto-select based on SSL
+            'connection_timeout' => 10,
+            'max_keepalive' => 65535, // Mosquitto supports very high keepalive values
+            'supports_anonymous' => true, // Mosquitto often allows anonymous connections
+            'default_qos' => 0, // Default QoS level for Mosquitto
+            'supports_retained' => true, // Mosquitto supports retained messages
+            'supports_will' => true, // Mosquitto supports last will and testament
+        ],
     ],
     
     /*
