@@ -30,8 +30,8 @@ class LandsController extends Controller
             'location' => 'required|json',
             'enabled' => 'boolean',
             'data' => 'nullable|array',
-            'data.*.key' => 'required_with:data.*.value|string|max:255',
-            'data.*.value' => 'required_with:data.*.key|string|max:255',
+            'data.*.key' => 'nullable|string|max:255',
+            'data.*.value' => 'nullable|string|max:255',
         ], [
             'geojson.required' => 'Please draw a polygon on the map to define the land boundaries.',
             'geojson.json' => 'Invalid polygon data. Please redraw the polygon on the map.',
@@ -104,8 +104,8 @@ class LandsController extends Controller
             'location' => 'required|json',
             'enabled' => 'boolean',
             'data' => 'nullable|array',
-            'data.*.key' => 'required_with:data.*.value|string|max:255',
-            'data.*.value' => 'required_with:data.*.key|string|max:255',
+            'data.*.key' => 'nullable|string|max:255',
+            'data.*.value' => 'nullable|string|max:255',
         ], [
             'geojson.required' => 'Please draw a polygon on the map to define the land boundaries.',
             'geojson.json' => 'Invalid polygon data. Please redraw the polygon on the map.',
