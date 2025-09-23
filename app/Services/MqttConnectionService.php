@@ -92,14 +92,64 @@ class MqttConnectionService
         
         $startTime = time();
         
-        if ($library === 'php-mqtt') {
-            $this->connectPhpMqtt($brokerKey, $devices, $firstDevice, $brokerType, $connectionTimeout);
+        // For The Things Stack, implement strict timeout to prevent blocking
+        if ($brokerType === 'thethings_stack') {
+            $this->connectWithStrictTimeout($brokerKey, $devices, $firstDevice, $brokerType, $connectionTimeout);
         } else {
-            $this->connectBluerhinos($brokerKey, $devices, $firstDevice, $brokerType);
+            if ($library === 'php-mqtt') {
+                $this->connectPhpMqtt($brokerKey, $devices, $firstDevice, $brokerType, $connectionTimeout);
+            } else {
+                $this->connectBluerhinos($brokerKey, $devices, $firstDevice, $brokerType);
+            }
         }
         
         $connectionTime = time() - $startTime;
         Log::info("MQTT: Connection completed for {$firstDevice->mqtt_host}:{$port} in {$connectionTime}s");
+    }
+
+    /**
+     * Connect to The Things Stack with strict timeout to prevent blocking.
+     */
+    private function connectWithStrictTimeout(string $brokerKey, Collection $devices, Device $firstDevice, string $brokerType, int $connectionTimeout): void
+    {
+        $timeoutSeconds = min($connectionTimeout, 15); // Maximum 15 seconds for TTS
+        
+        Log::info("MQTT: Using strict timeout ({$timeoutSeconds}s) for The Things Stack connection");
+        
+        // Use a timeout mechanism to prevent indefinite blocking
+        $startTime = time();
+        $connected = false;
+        $exception = null;
+        
+        // Set default socket timeout
+        $originalTimeout = ini_get('default_socket_timeout');
+        ini_set('default_socket_timeout', $timeoutSeconds);
+        
+        try {
+            // Attempt connection with timeout protection
+            $this->connectBluerhinos($brokerKey, $devices, $firstDevice, $brokerType);
+            $connected = true;
+        } catch (\Exception $e) {
+            $exception = $e;
+        } finally {
+            // Restore original timeout
+            ini_set('default_socket_timeout', $originalTimeout);
+        }
+        
+        $elapsedTime = time() - $startTime;
+        
+        if (!$connected || $elapsedTime >= $timeoutSeconds) {
+            $errorMsg = $exception ? $exception->getMessage() : "Connection timeout after {$elapsedTime}s";
+            Log::warning("MQTT: The Things Stack connection failed or timed out: {$errorMsg}");
+            
+            // Update devices to error status but don't throw exception to allow other brokers to connect
+            $this->updateDevicesStatus($devices, 'error');
+            
+            // Don't throw exception - just log and continue with other brokers
+            return;
+        }
+        
+        Log::info("MQTT: The Things Stack connected successfully in {$elapsedTime}s");
     }
 
     /**
@@ -128,6 +178,27 @@ class MqttConnectionService
         
         if ($username || $password) {
             Log::info("MQTT: Authenticating with username: " . ($username ?: 'anonymous'));
+        }
+        
+        // For The Things Stack, implement connection timeout protection
+        if ($brokerType === 'thethings_stack') {
+            // Set socket timeout for The Things Stack connections
+            $mqtt->socket_timeout = 10; // 10 seconds timeout
+            
+            // Use stream_context for SSL connections with timeout
+            if ($firstDevice->use_ssl) {
+                $context = stream_context_create([
+                    'ssl' => [
+                        'verify_peer' => false,
+                        'verify_peer_name' => false,
+                        'allow_self_signed' => true,
+                    ],
+                    'socket' => [
+                        'timeout' => 10,
+                    ]
+                ]);
+                $mqtt->context = $context;
+            }
         }
         
         // Connect with appropriate parameters
@@ -284,22 +355,25 @@ class MqttConnectionService
     {
         Log::info("MQTT: Starting BluerhiNos topic subscriptions for {$brokerType}");
         
-        // Collect all topics for this broker
+        // Collect all topics for this broker with device-specific callbacks
         $topics = [];
         foreach ($devices as $device) {
             foreach ($device->mqtt_topics as $topic) {
+                // Create a closure that captures the specific device collection for this broker
+                $brokerDevices = $devices; // This collection is already filtered for this broker
                 $topics[$topic] = [
                     'qos' => 0,
-                    'function' => function($receivedTopic, $message) use ($devices) {
-                        app(MqttPayloadHandler::class)->handleMessage($devices, $receivedTopic, $message);
+                    'function' => function($receivedTopic, $message) use ($brokerDevices, $brokerType) {
+                        Log::debug("MQTT: [{$brokerType}] Received message on topic: {$receivedTopic}");
+                        app(MqttPayloadHandler::class)->handleMessage($brokerDevices, $receivedTopic, $message);
                     }
                 ];
-                Log::info("MQTT: Added {$brokerType} topic for subscription: {$topic}");
+                Log::info("MQTT: Added {$brokerType} topic for subscription: {$topic} (device: {$device->name})");
             }
         }
         
         if (!empty($topics)) {
-            Log::info("MQTT: Subscribing to " . count($topics) . " {$brokerType} topics");
+            Log::info("MQTT: Subscribing to " . count($topics) . " {$brokerType} topics for " . $devices->count() . " devices");
             $mqtt->subscribe($topics, 0);
             Log::info("MQTT: Subscribed to " . count($topics) . " {$brokerType} topics successfully");
             
@@ -318,17 +392,20 @@ class MqttConnectionService
         $topicCount = 0;
         foreach ($devices as $device) {
             foreach ($device->mqtt_topics as $topic) {
-                $mqtt->subscribe($topic, function ($receivedTopic, $message, $retained, $matchedWildcards) use ($devices) {
-                    app(MqttPayloadHandler::class)->handleMessage($devices, $receivedTopic, $message);
+                // Create a closure that captures the specific device collection for this broker
+                $brokerDevices = $devices; // This collection is already filtered for this broker
+                $mqtt->subscribe($topic, function ($receivedTopic, $message, $retained, $matchedWildcards) use ($brokerDevices, $brokerType) {
+                    Log::debug("MQTT: [SSL {$brokerType}] Received message on topic: {$receivedTopic}");
+                    app(MqttPayloadHandler::class)->handleMessage($brokerDevices, $receivedTopic, $message);
                 }, 0);
                 
-                Log::info("MQTT: Added SSL {$brokerType} topic for subscription: {$topic}");
+                Log::info("MQTT: Added SSL {$brokerType} topic for subscription: {$topic} (device: {$device->name})");
                 $topicCount++;
             }
         }
         
         if ($topicCount > 0) {
-            Log::info("MQTT: Subscribed to {$topicCount} SSL {$brokerType} topics successfully");
+            Log::info("MQTT: Subscribed to {$topicCount} SSL {$brokerType} topics for " . $devices->count() . " devices successfully");
             
             // Update all devices status to online
             $this->updateDevicesStatus($devices, 'online');
