@@ -96,7 +96,7 @@
                                                 <ul class="mb-0 small">
                                                     <li>Device ID: unique name</li>
                                                     <li>Connection Type: MQTT</li>
-                                                    <li>MQTT Host: broker.emqx.io</li>
+                                                    <li>MQTT Host: test.mosquitto.org</li>
                                                     <li>Port: 1883</li>
                                                     <li>Topic: where device sends data</li>
                                                 </ul>
@@ -375,7 +375,7 @@
                                                 <ul class="mt-1">
                                                     <li>ID: <code>garden_temp_01</code></li>
                                                     <li>Type: MQTT</li>
-                                                    <li>Host: <code>broker.emqx.io</code></li>
+                                                    <li>Host: <code>test.mosquitto.org</code></li>
                                                     <li>Topic: <code>garden/sensors</code></li>
                                                 </ul>
                                             </li>

@@ -131,7 +131,7 @@
                                     <span class="px-2">Additions</span>
                                 </div>
 
-                                <div class="mb-3">
+                                {{-- <div class="mb-3">
                                     <label class="form-check">
                                         <input type="checkbox" name="terms" class="form-check-input @error('terms') is-invalid @enderror" 
                                                {{ old('terms') ? 'checked' : '' }} required>
@@ -141,7 +141,7 @@
                                     @error('terms')
                                         <div class="form-text text-danger">{{ $message }}</div>
                                     @enderror
-                                </div>
+                                </div> --}}
 
                                 <button type="submit" class="btn btn-teal w-100">Register</button>
 

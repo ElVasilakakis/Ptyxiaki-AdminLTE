@@ -263,10 +263,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <label class="form-label">Connection Broker</label>
                                         <select name="connection_broker" class="form-select @error('connection_broker') is-invalid @enderror">
                                             <option value="">Select broker type</option>
-                                            <option value="emqx" {{ old('connection_broker') == 'emqx' ? 'selected' : '' }}>EMQX</option>
-                                            <option value="hivemq" {{ old('connection_broker') == 'hivemq' ? 'selected' : '' }}>HiveMQ</option>
                                             <option value="mosquitto" {{ old('connection_broker') == 'mosquitto' ? 'selected' : '' }}>Mosquitto</option>
-                                            <option value="thethings_stack" {{ old('connection_broker') == 'thethings_stack' ? 'selected' : '' }}>The Things Stack</option>
+                                            <!-- HiveMQ and EMQX options removed from user interface but functionality preserved -->
+                                            <!-- The Things Stack removed from MQTT options - it only works with webhooks -->
                                         </select>
                                         @error('connection_broker')
                                             <div class="invalid-feedback">{{ $message }}</div>
