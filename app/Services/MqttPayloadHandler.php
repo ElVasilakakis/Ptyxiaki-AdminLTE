@@ -97,6 +97,11 @@ class MqttPayloadHandler
                 $this->handleBrokerSpecificPayload($device, $data, $topic, 'hivemq');
                 break;
                 
+            case 'mosquitto':
+            case 'mosquitto':
+                $this->handleBrokerSpecificPayload($device, $data, $topic, 'mosquitto');
+                break;
+                
             case 'emqx':
             case 'esp32':
             default:

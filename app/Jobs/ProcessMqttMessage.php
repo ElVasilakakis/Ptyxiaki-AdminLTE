@@ -141,6 +141,10 @@ class ProcessMqttMessage implements ShouldQueue
                 $this->handleBrokerSpecificPayload($data, 'hivemq');
                 break;
                 
+            case 'mosquitto':
+                $this->handleBrokerSpecificPayload($data, 'mosquitto');
+                break;
+                
             case 'emqx':
             case 'esp32':
             default:

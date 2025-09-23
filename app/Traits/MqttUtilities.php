@@ -98,7 +98,7 @@ trait MqttUtilities
             return 'emqx';
         }
         
-        if (str_contains($host, 'mosquitto') || str_contains($host, 'eclipse-mosquitto')) {
+        if (str_contains($host, 'mosquitto') || str_contains($host, 'mosquitto')) {
             return 'mosquitto';
         }
         

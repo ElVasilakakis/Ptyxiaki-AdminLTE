@@ -35,38 +35,70 @@ Route::get('/', function () {
 
 // Add to routes/web.php
 // Add to routes/api.php
-Route::get('/switch-to-mosquitto', function () {
-    $device = \App\Models\Device::where('mqtt_host', 'broker.emqx.io')->first();
+// Add to routes/api.php - CORRECTED VERSION
+Route::get('/listen-for-mqttx', function () {
+    set_time_limit(45);
     
-    if (!$device) {
-        $device = new \App\Models\Device();
-        $device->name = 'Mosquitto Test Device';
-        $device->device_id = 'mosquitto_ploi_device';
-        $device->connection_type = 'mqtt';
-        $device->is_active = true;
-        $device->user_id = 1;
+    $output = "=== Listening for MQTTX Messages ===\n";
+    $output .= "Time: " . now() . "\n\n";
+    
+    try {
+        $mqtt = new \Bluerhinos\phpMQTT('test.mosquitto.org', 1883, 'mqttx-listener-' . time());
+        
+        if ($mqtt->connect(true)) {
+            $output .= "✅ Laravel connected to Mosquitto\n";
+            
+            $testTopic = 'mqttx/test/' . time();
+            $output .= "📡 Subscribed to: {$testTopic}\n";
+            $output .= "🚀 NOW publish from MQTTX to: {$testTopic}\n";
+            $output .= "   Message: 'Hello from MQTTX'\n\n";
+            
+            $messageReceived = false;
+            $startTime = time();
+            
+            // Fixed the subscribe syntax here
+            $topics = [
+                $testTopic => [
+                    'qos' => 0, 
+                    'function' => function($topic, $message) use (&$messageReceived, &$output, $startTime) {
+                        $receiveTime = time() - $startTime;
+                        $output .= "🎉 SUCCESS! Message received after {$receiveTime} seconds!\n";
+                        $output .= "Topic: {$topic}\n";
+                        $output .= "Message: {$message}\n";
+                        $output .= "Timestamp: " . date('H:i:s') . "\n";
+                        $messageReceived = true;
+                    }
+                ]
+            ];
+            
+            $mqtt->subscribe($topics, 0);
+            
+            // Listen for 30 seconds
+            $start = time();
+            while ((time() - $start) < 30 && !$messageReceived) {
+                $mqtt->proc();
+                usleep(100000);
+            }
+            
+            if ($messageReceived) {
+                $output .= "\n✅ MQTTX is publishing correctly to Mosquitto!\n";
+            } else {
+                $output .= "\n❌ No messages received. MQTTX publish may have failed.\n";
+                $output .= "Check your MQTTX connection settings.\n";
+            }
+            
+            $mqtt->close();
+            
+        } else {
+            $output .= "❌ Laravel failed to connect to Mosquitto\n";
+        }
+        
+    } catch (\Exception $e) {
+        $output .= "❌ Error: " . $e->getMessage() . "\n";
     }
     
-    // Configure for Mosquitto (allows anonymous connections)
-    $device->mqtt_host = 'test.mosquitto.org';
-    $device->port = 1883;
-    $device->username = null; // Anonymous
-    $device->password = null;
-    $device->use_ssl = false; // Use Bluerhinos
-    $device->mqtt_topics = [
-        'ploi/sensors/temperature',
-        'ploi/sensors/humidity', 
-        'ploi/devices/status',
-        'ploi/test/+'
-    ];
-    $device->save();
-    
-    return "✅ Device switched to test.mosquitto.org!\n" .
-           "Host: {$device->mqtt_host}\n" .
-           "Username: Anonymous\n" .
-           "Topics: " . json_encode($device->mqtt_topics);
+    return response($output, 200, ['Content-Type' => 'text/plain']);
 });
-
 
 
 

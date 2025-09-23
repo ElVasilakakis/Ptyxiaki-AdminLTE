@@ -524,7 +524,8 @@ class MqttConnectionService
     {
         return $devices->groupBy(function ($device) {
             $port = $this->getDevicePort($device);
-            return $device->mqtt_host . ':' . $port . ':' . ($device->username ?: 'anonymous');
+            $brokerType = $this->detectBrokerType($device);
+            return $device->mqtt_host . ':' . $port . ':' . ($device->username ?: 'anonymous') . ':' . $brokerType;
         });
     }
 
