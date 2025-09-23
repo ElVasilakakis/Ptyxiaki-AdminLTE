@@ -34,36 +34,64 @@ Route::get('/', function () {
 });
 
 // Add to routes/web.php
-Route::get('/test-mqtt-simple', function () {
-    set_time_limit(30); // Prevent timeout
+Route::get('/test-mqtt-protocol', function () {
+    set_time_limit(45);
     
-    $output = "=== Quick MQTT Broker Test ===\n";
+    $output = "=== MQTT Protocol Test ===\n";
+    $output .= "Time: " . now() . "\n\n";
     
-    // Test multiple brokers
-    $brokers = [
-        'test.mosquitto.org' => 1883,
-        'mqtt.eclipseprojects.io' => 1883,
-        'broker.hivemq.com' => 1883,
-        'broker.emqx.io' => 1883
-    ];
-    
-    foreach ($brokers as $host => $port) {
-        $output .= "\nTesting {$host}:{$port}...\n";
+    try {
+        $connectionSettings = (new \PhpMqtt\Client\ConnectionSettings())
+            ->setUsername('mqttuser')
+            ->setPassword('12345678')
+            ->setConnectTimeout(15);
         
-        try {
-            $socket = @fsockopen($host, $port, $errno, $errstr, 5);
-            if ($socket) {
-                $output .= "✅ {$host} - Socket connection OK\n";
-                fclose($socket);
-            } else {
-                $output .= "❌ {$host} - Failed: {$errno} - {$errstr}\n";
-            }
-        } catch (\Exception $e) {
-            $output .= "❌ {$host} - Exception: " . $e->getMessage() . "\n";
+        $mqtt = new \PhpMqtt\Client\MqttClient('broker.emqx.io', 1883, 'ploi-protocol-test-' . time());
+        
+        $output .= "Attempting MQTT connection to broker.emqx.io...\n";
+        $start = microtime(true);
+        
+        $mqtt->connect($connectionSettings, true);
+        
+        $connectTime = round((microtime(true) - $start) * 1000, 2);
+        $output .= "✅ MQTT Connected successfully in {$connectTime}ms!\n";
+        
+        // Test simple subscription
+        $testTopic = 'ploi/protocol/test/' . time();
+        $output .= "📡 Subscribed to: {$testTopic}\n";
+        $output .= "Now publish to this topic from MQTTX to test!\n";
+        
+        $messageReceived = false;
+        $mqtt->subscribe($testTopic, function($topic, $message) use (&$messageReceived, &$output) {
+            $output .= "📨 RECEIVED MESSAGE!\n";
+            $output .= "Topic: {$topic}\n";
+            $output .= "Message: {$message}\n";
+            $messageReceived = true;
+        }, 0);
+        
+        // Listen for 15 seconds
+        $startListen = time();
+        while ((time() - $startListen) < 15 && !$messageReceived) {
+            $mqtt->loop(true);
+            usleep(100000);
         }
+        
+        if ($messageReceived) {
+            $output .= "🎉 SUCCESS! Ploi server can receive MQTT messages from EMQX!\n";
+        } else {
+            $output .= "⏰ Timeout: No messages received in 15 seconds\n";
+            $output .= "Try publishing to: {$testTopic}\n";
+        }
+        
+        $mqtt->disconnect();
+        $output .= "✅ Disconnected successfully\n";
+        
+    } catch (\Exception $e) {
+        $output .= "❌ MQTT Protocol Error: " . $e->getMessage() . "\n";
+        $output .= "Error Code: " . $e->getCode() . "\n";
     }
     
-    return response($output)->header('Content-Type', 'text/plain');
+    return response($output, 200, ['Content-Type' => 'text/plain']);
 });
 
 
@@ -127,10 +155,10 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
 
 });
 
-// // Catch all undefined routes and redirect to login for guests, dashboard for authenticated users
-// Route::fallback(function () {
-//     if (auth()->check()) {
-//         return redirect('/app/dashboard');
-//     }
-//     return redirect('/login');
-// });
+// Catch all undefined routes and redirect to login for guests, dashboard for authenticated users
+Route::fallback(function () {
+    if (auth()->check()) {
+        return redirect('/app/dashboard');
+    }
+    return redirect('/login');
+});
