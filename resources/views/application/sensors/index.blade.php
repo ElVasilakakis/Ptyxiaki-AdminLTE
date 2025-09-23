@@ -130,14 +130,11 @@
                     <div class="d-flex align-items-center gap-3">
                         <h6 class="mb-0">
                             <i class="ph-gauge me-2"></i>
-                            Sensors ({{ $sensors->total() }} total)
+                            Sensors ({{ $sensors->count() }} total)
                         </h6>
                         <span class="badge bg-success" id="live-indicator">
                             <i class="ph-broadcast me-1"></i>Live Updates
                         </span>
-                    </div>
-                    <div class="text-muted">
-                        Showing {{ $sensors->firstItem() ?? 0 }} to {{ $sensors->lastItem() ?? 0 }} of {{ $sensors->total() }} results
                     </div>
                 </div>
             </div>
@@ -176,18 +173,9 @@
                                         @foreach ($sensors as $sensor)
                                             @php
                                                 $alertStatus = $sensor->getAlertStatus();
-                                                $shouldShow = true;
-                                                
-                                                // Apply alert status filter if specified
-                                                if (request('alert_status') && request('alert_status') !== 'all') {
-                                                    if (!$sensor->alert_enabled || $alertStatus !== request('alert_status')) {
-                                                        $shouldShow = false;
-                                                    }
-                                                }
                                             @endphp
                                             
-                                            @if($shouldShow)
-                                                <tr data-sensor-id="{{ $sensor->id }}">
+                                            <tr data-sensor-id="{{ $sensor->id }}">
                                                     <td>
                                                         <span class="badge bg-info bg-opacity-10 text-info">
                                                             <i class="ph-gauge me-1"></i>
@@ -287,21 +275,11 @@
                                                         </div>
                                                     </td>
                                                 </tr>
-                                            @endif
                                         @endforeach
                                     </tbody>
                                 </table>
                             </div>
 
-                            <!-- Pagination -->
-                            <div class="d-flex justify-content-between align-items-center mt-4">
-                                <div class="text-muted">
-                                    Showing {{ $sensors->firstItem() ?? 0 }} to {{ $sensors->lastItem() ?? 0 }} of {{ $sensors->total() }} results
-                                </div>
-                                <div>
-                                    {{ $sensors->appends(request()->query())->links() }}
-                                </div>
-                            </div>
                         @else
                             <div class="text-center py-5">
                                 <i class="ph-gauge ph-4x text-muted mb-3"></i>
@@ -344,6 +322,7 @@
         background-color: #e8f5e8 !important;
         transition: background-color 0.5s ease;
     }
+
 </style>
 @endpush
 

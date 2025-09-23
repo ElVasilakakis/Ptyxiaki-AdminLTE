@@ -37,9 +37,28 @@ class SensorsController extends Controller
 
         // Apply alert status filter
         if ($request->filled('alert_status')) {
-            $query->where('alert_enabled', true);
-            if ($request->alert_status !== 'all') {
-                // We'll need to filter by alert status in the view since it's calculated
+            if ($request->alert_status === 'all') {
+                $query->where('alert_enabled', true);
+            } else {
+                // For specific alert statuses, we need to filter by threshold values
+                $query->where('alert_enabled', true)
+                      ->where(function($q) use ($request) {
+                          if ($request->alert_status === 'normal') {
+                              // Normal: value is between thresholds or no thresholds set
+                              $q->whereRaw('(
+                                  (min_threshold IS NULL OR CAST(JSON_UNQUOTE(value) AS DECIMAL(10,2)) >= min_threshold) AND
+                                  (max_threshold IS NULL OR CAST(JSON_UNQUOTE(value) AS DECIMAL(10,2)) <= max_threshold)
+                              )');
+                          } elseif ($request->alert_status === 'high') {
+                              // High: value is above max threshold
+                              $q->whereNotNull('max_threshold')
+                                ->whereRaw('CAST(JSON_UNQUOTE(value) AS DECIMAL(10,2)) > max_threshold');
+                          } elseif ($request->alert_status === 'low') {
+                              // Low: value is below min threshold
+                              $q->whereNotNull('min_threshold')
+                                ->whereRaw('CAST(JSON_UNQUOTE(value) AS DECIMAL(10,2)) < min_threshold');
+                          }
+                      });
             }
         }
 
@@ -55,8 +74,8 @@ class SensorsController extends Controller
             });
         }
 
-        // Get sensors with pagination
-        $sensors = $query->latest('reading_timestamp')->paginate(15);
+        // Get all sensors without pagination
+        $sensors = $query->latest('reading_timestamp')->get();
 
         // Get filter options
         $devices = \App\Models\Device::forUser(Auth::id())
