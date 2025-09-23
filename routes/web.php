@@ -127,10 +127,10 @@ Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
 
 });
 
-// Catch all undefined routes and redirect to login for guests, dashboard for authenticated users
-Route::fallback(function () {
-    if (auth()->check()) {
-        return redirect('/app/dashboard');
-    }
-    return redirect('/login');
-});
+// // Catch all undefined routes and redirect to login for guests, dashboard for authenticated users
+// Route::fallback(function () {
+//     if (auth()->check()) {
+//         return redirect('/app/dashboard');
+//     }
+//     return redirect('/login');
+// });
