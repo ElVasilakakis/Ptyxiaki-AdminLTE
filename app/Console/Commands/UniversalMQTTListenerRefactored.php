@@ -8,10 +8,10 @@ use App\Services\MqttConnectionService;
 use App\Services\MqttPayloadHandler;
 use Illuminate\Support\Facades\Log;
 
-class UniversalMQTTListener extends Command
+class UniversalMQTTListenerRefactored extends Command
 {
-    protected $signature = 'mqtt:listen-all {--timeout=0} {--connection-timeout=5} {--skip-problematic}';
-    protected $description = 'Listen to MQTT topics for all devices with MQTT connection type (refactored with modular architecture)';
+    protected $signature = 'mqtt:listen-all-refactored {--timeout=0} {--connection-timeout=5} {--skip-problematic}';
+    protected $description = 'Refactored MQTT listener with modular architecture for all devices with MQTT connection type';
 
     private MqttConnectionService $connectionService;
     private MqttPayloadHandler $payloadHandler;
@@ -29,7 +29,7 @@ class UniversalMQTTListener extends Command
         $connectionTimeout = (int) $this->option('connection-timeout');
         $skipProblematic = $this->option('skip-problematic');
 
-        Log::info('MQTT: Starting Universal MQTT Listener');
+        Log::info('MQTT: Starting Universal MQTT Listener (Refactored)');
 
         try {
             // Get all MQTT devices
@@ -102,9 +102,9 @@ class UniversalMQTTListener extends Command
         $this->info("Found " . $devices->count() . " MQTT devices to monitor:");
         
         foreach ($devices as $device) {
-            $brokerType = $this->connectionService->detectBrokerType($device);
-            $library = $this->connectionService->selectMqttLibrary($device, $brokerType);
-            $port = $this->connectionService->getDevicePort($device);
+            $brokerType = app(MqttConnectionService::class)->detectBrokerType($device);
+            $library = app(MqttConnectionService::class)->selectMqttLibrary($device, $brokerType);
+            $port = app(MqttConnectionService::class)->getDevicePort($device);
             
             $this->info("- {$device->name} ({$device->device_id}) - {$device->mqtt_host}:{$port} [{$brokerType}] -> {$library}");
         }
@@ -143,8 +143,6 @@ class UniversalMQTTListener extends Command
             'skipped' => $skipped
         ]);
     }
-
-    // Legacy methods removed - all functionality moved to services
 
     /**
      * Run the listener with a timeout.
@@ -185,9 +183,30 @@ class UniversalMQTTListener extends Command
         Log::info('MQTT: Interrupt received, shutting down gracefully');
     }
 
+    /**
+     * Display runtime statistics.
+     */
+    private function displayRuntimeStats(): void
+    {
+        $connectedClients = $this->connectionService->getConnectedClientsCount();
+        $this->info("📊 Runtime Stats: {$connectedClients} active connections");
+    }
 
-    // Note: All old methods have been removed and replaced with service-based architecture.
-    // Message handling is now delegated to MqttPayloadHandler service.
-    // Connection management is handled by MqttConnectionService.
-    // Utility functions are available through MqttUtilities trait in the services.
+    /**
+     * Handle command interruption gracefully.
+     */
+    public function handleInterruption(): void
+    {
+        $this->info("\n🛑 Graceful shutdown initiated...");
+        Log::info('MQTT: Graceful shutdown initiated');
+        
+        try {
+            $this->connectionService->disconnectAll();
+            $this->info("✅ All connections closed successfully");
+            Log::info('MQTT: All connections closed successfully');
+        } catch (\Exception $e) {
+            $this->error("❌ Error during shutdown: " . $e->getMessage());
+            Log::error('MQTT: Error during shutdown', ['error' => $e->getMessage()]);
+        }
+    }
 }
