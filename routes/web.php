@@ -30,6 +30,65 @@ Route::get('/', function () {
     return redirect('/app/dashboard');
 });
 
+// Add this route for testing MQTT on Ploi server
+Route::get('/test-mqtt', function () {
+    try {
+        // Import required classes
+        use PhpMqtt\Client\MqttClient;
+        use PhpMqtt\Client\ConnectionSettings;
+        
+        $output = "=== MQTT Test from Ploi Server ===\n";
+        $output .= "Server: " . request()->getHost() . "\n";
+        $output .= "Time: " . now() . "\n\n";
+        
+        // Test EMQX connection
+        $connectionSettings = (new ConnectionSettings())
+            ->setUsername('mqttuser')
+            ->setPassword('12345678')
+            ->setConnectTimeout(10);
+        
+        $mqtt = new MqttClient('broker.emqx.io', 1883, 'ploi-test-' . time());
+        
+        $mqtt->connect($connectionSettings, true);
+        $output .= "✅ Connected to EMQX successfully!\n\n";
+        
+        // Test simple subscription
+        $testTopic = 'ploi/test/' . time();
+        $output .= "📡 Subscribed to: {$testTopic}\n";
+        $output .= "Publish a message to this topic from MQTTX!\n\n";
+        
+        $messageReceived = false;
+        $mqtt->subscribe($testTopic, function($topic, $message) use (&$messageReceived, &$output) {
+            $output .= "📨 RECEIVED MESSAGE!\n";
+            $output .= "Topic: {$topic}\n";
+            $output .= "Message: {$message}\n";
+            $messageReceived = true;
+        }, 0);
+        
+        // Listen for 10 seconds
+        $start = time();
+        while ((time() - $start) < 10 && !$messageReceived) {
+            $mqtt->loop(true);
+            usleep(100000);
+        }
+        
+        if ($messageReceived) {
+            $output .= "✅ SUCCESS! Server can receive MQTT messages!\n";
+        } else {
+            $output .= "❌ No messages received in 10 seconds\n";
+        }
+        
+        $mqtt->disconnect();
+        
+    } catch (\Exception $e) {
+        $output .= "❌ Error: " . $e->getMessage() . "\n";
+        $output .= "Stack trace: " . $e->getTraceAsString() . "\n";
+    }
+    
+    return response($output)->header('Content-Type', 'text/plain');
+});
+
+
 // Application Routes (Protected by authentication)
 Route::group(['prefix' => 'app', 'middleware' => 'auth'], function () {
 
