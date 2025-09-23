@@ -7,6 +7,9 @@ use App\Http\Controllers\Application\LandsController;
 use App\Http\Controllers\Application\DevicesController;
 use App\Http\Controllers\Application\SensorsController;
 use App\Http\Controllers\LoRaWANController;
+        // Import required classes
+        use PhpMqtt\Client\MqttClient;
+        use PhpMqtt\Client\ConnectionSettings;
 
 Route::get('/debug/lorawan-check', [LoRaWANController::class, 'debugConnection']);
 Route::get('/debug/lorawan-simple', [LoRaWANController::class, 'simpleTest']);
@@ -33,9 +36,7 @@ Route::get('/', function () {
 // Add this route for testing MQTT on Ploi server
 Route::get('/test-mqtt', function () {
     try {
-        // Import required classes
-        use PhpMqtt\Client\MqttClient;
-        use PhpMqtt\Client\ConnectionSettings;
+
         
         $output = "=== MQTT Test from Ploi Server ===\n";
         $output .= "Server: " . request()->getHost() . "\n";
