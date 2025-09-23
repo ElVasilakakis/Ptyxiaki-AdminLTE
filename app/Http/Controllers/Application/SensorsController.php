@@ -97,8 +97,8 @@ class SensorsController extends Controller
             'unit' => 'nullable|string|max:50',
             'enabled' => 'boolean',
             'alert_enabled' => 'boolean',
-            'alert_threshold_min' => 'nullable|numeric',
-            'alert_threshold_max' => 'nullable|numeric',
+            'min_threshold' => 'nullable|numeric',
+            'max_threshold' => 'nullable|numeric',
         ]);
 
         if ($validator->fails()) {
@@ -108,10 +108,10 @@ class SensorsController extends Controller
         }
 
         // Validate that min threshold is less than max threshold
-        if ($request->alert_threshold_min !== null && $request->alert_threshold_max !== null) {
-            if ((float)$request->alert_threshold_min >= (float)$request->alert_threshold_max) {
+        if ($request->min_threshold !== null && $request->max_threshold !== null) {
+            if ((float)$request->min_threshold >= (float)$request->max_threshold) {
                 return redirect()->back()
-                    ->withErrors(['alert_threshold_min' => 'Minimum threshold must be less than maximum threshold'])
+                    ->withErrors(['min_threshold' => 'Minimum threshold must be less than maximum threshold'])
                     ->withInput();
             }
         }
@@ -123,8 +123,8 @@ class SensorsController extends Controller
                 'unit' => $request->unit,
                 'enabled' => $request->has('enabled'),
                 'alert_enabled' => $request->has('alert_enabled'),
-                'alert_threshold_min' => $request->alert_threshold_min,
-                'alert_threshold_max' => $request->alert_threshold_max,
+                'min_threshold' => $request->min_threshold,
+                'max_threshold' => $request->max_threshold,
             ]);
 
             return redirect()->route('app.sensors.index')

@@ -125,7 +125,7 @@
                                         <br>
                                         <small>Current: {{ $sensor->getFormattedValue() }}</small>
                                         <br>
-                                        <small>Threshold: {{ $alertStatus === 'high' ? 'Max ' . $sensor->alert_threshold_max : 'Min ' . $sensor->alert_threshold_min }}{{ $sensor->unit ? ' ' . $sensor->unit : '' }}</small>
+                                        <small>Threshold: {{ $alertStatus === 'high' ? 'Max ' . $sensor->max_threshold : 'Min ' . $sensor->min_threshold }}{{ $sensor->unit ? ' ' . $sensor->unit : '' }}</small>
                                     </div>
                                 </div>
                             </div>
@@ -188,28 +188,28 @@
                                                         Checking...
                                                     </span>
                                                 </div>
-                                            @elseif($sensor->alert_enabled && ($sensor->alert_threshold_min !== null || $sensor->alert_threshold_max !== null))
+                                            @elseif($sensor->alert_enabled && ($sensor->min_threshold !== null || $sensor->max_threshold !== null))
                                                 <div class="threshold-info">
-                                                    @if($sensor->alert_threshold_min !== null)
+                                                    @if($sensor->min_threshold !== null)
                                                         <small class="text-muted d-block">
                                                             <i class="ph-arrow-down me-1"></i>
-                                                            Min: {{ $sensor->alert_threshold_min }}{{ $sensor->unit ? ' ' . $sensor->unit : '' }}
+                                                            Min: {{ $sensor->min_threshold }}{{ $sensor->unit ? ' ' . $sensor->unit : '' }}
                                                         </small>
                                                     @endif
-                                                    @if($sensor->alert_threshold_max !== null)
+                                                    @if($sensor->max_threshold !== null)
                                                         <small class="text-muted d-block">
                                                             <i class="ph-arrow-up me-1"></i>
-                                                            Max: {{ $sensor->alert_threshold_max }}{{ $sensor->unit ? ' ' . $sensor->unit : '' }}
+                                                            Max: {{ $sensor->max_threshold }}{{ $sensor->unit ? ' ' . $sensor->unit : '' }}
                                                         </small>
                                                     @endif
                                                     @if($sensor->value !== null && is_numeric($sensor->value))
                                                         @php
                                                             $value = (float)$sensor->value;
                                                             $withinRange = true;
-                                                            if($sensor->alert_threshold_min !== null && $value < $sensor->alert_threshold_min) {
+                                                            if($sensor->min_threshold !== null && $value < $sensor->min_threshold) {
                                                                 $withinRange = false;
                                                             }
-                                                            if($sensor->alert_threshold_max !== null && $value > $sensor->alert_threshold_max) {
+                                                            if($sensor->max_threshold !== null && $value > $sensor->max_threshold) {
                                                                 $withinRange = false;
                                                             }
                                                         @endphp

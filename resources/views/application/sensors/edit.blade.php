@@ -132,24 +132,24 @@
 
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Minimum Threshold</label>
-                                    <input type="number" name="alert_threshold_min" step="0.01" 
-                                           class="form-control @error('alert_threshold_min') is-invalid @enderror" 
-                                           placeholder="Enter minimum value" 
-                                           value="{{ old('alert_threshold_min', $sensor->alert_threshold_min) }}">
+                                    <input type="number" name="min_threshold" step="0.01"
+                                           class="form-control @error('min_threshold') is-invalid @enderror"
+                                           placeholder="Enter minimum value"
+                                           value="{{ old('min_threshold', $sensor->min_threshold) }}">
                                     <small class="form-text text-muted">Alert when value goes below this threshold</small>
-                                    @error('alert_threshold_min')
+                                    @error('min_threshold')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
 
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Maximum Threshold</label>
-                                    <input type="number" name="alert_threshold_max" step="0.01" 
-                                           class="form-control @error('alert_threshold_max') is-invalid @enderror" 
+                                    <input type="number" name="max_threshold" step="0.01" 
+                                           class="form-control @error('max_threshold') is-invalid @enderror" 
                                            placeholder="Enter maximum value" 
-                                           value="{{ old('alert_threshold_max', $sensor->alert_threshold_max) }}">
+                                           value="{{ old('max_threshold', $sensor->max_threshold) }}">
                                     <small class="form-text text-muted">Alert when value goes above this threshold</small>
-                                    @error('alert_threshold_max')
+                                    @error('max_threshold')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>

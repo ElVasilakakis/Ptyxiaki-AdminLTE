@@ -433,9 +433,9 @@ class DevicesController extends Controller
                 $alertsHtml .= '<br><small>Threshold: ';
                 
                 if ($alertStatus === 'high') {
-                    $alertsHtml .= 'Max ' . $sensor->alert_threshold_max;
+                    $alertsHtml .= 'Max ' . $sensor->max_threshold;
                 } else {
-                    $alertsHtml .= 'Min ' . $sensor->alert_threshold_min;
+                    $alertsHtml .= 'Min ' . $sensor->min_threshold;
                 }
                 
                 $alertsHtml .= $sensor->unit ? ' ' . e($sensor->unit) : '';
