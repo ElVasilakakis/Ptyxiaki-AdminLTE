@@ -14,6 +14,34 @@ return [
     'default_keepalive' => env('MQTT_KEEPALIVE', 60),
     'default_reconnect_attempts' => env('MQTT_RECONNECT_ATTEMPTS', 3),
     'message_processing_sleep' => env('MQTT_MESSAGE_SLEEP', 100000), // microseconds
+    'device_reload_interval' => env('MQTT_DEVICE_RELOAD_INTERVAL', 60), // seconds
+    
+    /*
+    |--------------------------------------------------------------------------
+    | Queue Configuration
+    |--------------------------------------------------------------------------
+    */
+    
+    'queue' => [
+        'connection' => env('MQTT_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'database')),
+        'default_queue' => env('MQTT_DEFAULT_QUEUE', 'mqtt'),
+        'tts_queue' => env('MQTT_TTS_QUEUE', 'tts'), // Separate queue for The Things Stack
+        'job_timeout' => env('MQTT_JOB_TIMEOUT', 30), // seconds
+        'job_tries' => env('MQTT_JOB_TRIES', 3),
+        'job_backoff' => [5, 10, 30], // seconds
+    ],
+    
+    /*
+    |--------------------------------------------------------------------------
+    | Exponential Backoff Configuration
+    |--------------------------------------------------------------------------
+    */
+    
+    'backoff' => [
+        'delays' => [5, 10, 30, 60, 120], // seconds
+        'max_attempts' => env('MQTT_MAX_RECONNECT_ATTEMPTS', 10),
+        'jitter_percentage' => 0.1, // 10% jitter
+    ],
     
     /*
     |--------------------------------------------------------------------------
@@ -39,13 +67,17 @@ return [
             'max_keepalive' => 30,
             'library' => 'bluerhinos', // Force Bluerhinos for TTS
             'connection_timeout' => 10,
+            'processing_timeout' => 5, // seconds for TTS message processing
+            'backoff_multiplier' => 2, // Longer backoff for TTS
         ],
         'hivemq' => [
             'requires_certificates' => true,
             'library' => 'auto', // Auto-select based on SSL
+            'connection_timeout' => 15,
         ],
         'emqx' => [
             'library' => 'auto', // Auto-select based on SSL
+            'connection_timeout' => 10,
         ],
     ],
     

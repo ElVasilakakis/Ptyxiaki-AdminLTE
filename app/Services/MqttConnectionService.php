@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\ProcessMqttMessage;
 use App\Models\Device;
 use App\Traits\MqttUtilities;
 use Bluerhinos\phpMQTT;
@@ -45,7 +46,7 @@ class MqttConnectionService
     /**
      * Connect to all MQTT brokers for the given devices.
      */
-    public function connectToAllBrokers(Collection $devices, int $connectionTimeout, bool $skipProblematic): array
+    public function connectToAllBrokers(Collection $devices, int $connectionTimeout, bool $skipProblematic, bool $skipTts = false): array
     {
         $brokerGroups = $this->groupDevicesByBroker($devices);
         $connectionResults = [];
@@ -53,6 +54,14 @@ class MqttConnectionService
         foreach ($brokerGroups as $brokerKey => $deviceGroup) {
             $firstDevice = $deviceGroup->first();
             $brokerType = $this->detectBrokerType($firstDevice);
+            
+            // Skip The Things Stack if flag is set
+            if ($skipTts && $brokerType === 'thethings_stack') {
+                Log::warning("MQTT: Skipping The Things Stack broker due to --skip-tts flag: {$firstDevice->mqtt_host}");
+                $this->updateDevicesStatus($deviceGroup, 'skipped');
+                $connectionResults[$brokerKey] = ['status' => 'skipped', 'reason' => 'skip_tts_flag'];
+                continue;
+            }
             
             // Skip known problematic brokers if flag is set
             if ($skipProblematic && $this->isProblematicBroker($firstDevice->mqtt_host)) {
@@ -112,40 +121,54 @@ class MqttConnectionService
      */
     private function connectWithStrictTimeout(string $brokerKey, Collection $devices, Device $firstDevice, string $brokerType, int $connectionTimeout): void
     {
-        $timeoutSeconds = min($connectionTimeout, 15); // Maximum 15 seconds for TTS
+        $timeoutSeconds = min($connectionTimeout, 8); // Maximum 8 seconds for TTS
         
         Log::info("MQTT: Using strict timeout ({$timeoutSeconds}s) for The Things Stack connection");
         
-        // Use a timeout mechanism to prevent indefinite blocking
-        $startTime = time();
+        // Skip TTS connection entirely if it's known to be problematic
+        if ($this->isProblematicBroker($firstDevice->mqtt_host)) {
+            Log::warning("MQTT: Skipping The Things Stack connection - known to cause blocking issues");
+            $this->updateDevicesStatus($devices, 'skipped');
+            return;
+        }
+        
+        // Use alarm signal for hard timeout (Unix systems only)
         $connected = false;
         $exception = null;
+        $startTime = time();
         
-        // Set default socket timeout
-        $originalTimeout = ini_get('default_socket_timeout');
-        ini_set('default_socket_timeout', $timeoutSeconds);
-        
-        try {
-            // Attempt connection with timeout protection
-            $this->connectBluerhinos($brokerKey, $devices, $firstDevice, $brokerType);
-            $connected = true;
-        } catch (\Exception $e) {
-            $exception = $e;
-        } finally {
-            // Restore original timeout
-            ini_set('default_socket_timeout', $originalTimeout);
+        // Set up signal handler for timeout
+        if (function_exists('pcntl_signal') && function_exists('pcntl_alarm')) {
+            pcntl_signal(SIGALRM, function() {
+                throw new \Exception("Connection timeout - SIGALRM triggered");
+            });
+            
+            pcntl_alarm($timeoutSeconds);
+            
+            try {
+                Log::info("MQTT: Attempting TTS connection with SIGALRM timeout");
+                $this->connectBluerhinos($brokerKey, $devices, $firstDevice, $brokerType);
+                $connected = true;
+                pcntl_alarm(0); // Cancel alarm
+            } catch (\Exception $e) {
+                pcntl_alarm(0); // Cancel alarm
+                $exception = $e;
+            }
+        } else {
+            // Fallback: Skip TTS entirely on systems without pcntl
+            Log::warning("MQTT: PCNTL not available, skipping The Things Stack to prevent blocking");
+            $this->updateDevicesStatus($devices, 'skipped');
+            return;
         }
         
         $elapsedTime = time() - $startTime;
         
-        if (!$connected || $elapsedTime >= $timeoutSeconds) {
-            $errorMsg = $exception ? $exception->getMessage() : "Connection timeout after {$elapsedTime}s";
-            Log::warning("MQTT: The Things Stack connection failed or timed out: {$errorMsg}");
+        if (!$connected) {
+            $errorMsg = $exception ? $exception->getMessage() : "Connection failed after {$elapsedTime}s";
+            Log::warning("MQTT: The Things Stack connection failed: {$errorMsg}");
             
-            // Update devices to error status but don't throw exception to allow other brokers to connect
+            // Update devices to error status but don't throw exception
             $this->updateDevicesStatus($devices, 'error');
-            
-            // Don't throw exception - just log and continue with other brokers
             return;
         }
         
@@ -365,7 +388,7 @@ class MqttConnectionService
                     'qos' => 0,
                     'function' => function($receivedTopic, $message) use ($brokerDevices, $brokerType) {
                         Log::debug("MQTT: [{$brokerType}] Received message on topic: {$receivedTopic}");
-                        app(MqttPayloadHandler::class)->handleMessage($brokerDevices, $receivedTopic, $message);
+                        $this->dispatchMessageJob($brokerDevices, $receivedTopic, $message);
                     }
                 ];
                 Log::info("MQTT: Added {$brokerType} topic for subscription: {$topic} (device: {$device->name})");
@@ -396,7 +419,7 @@ class MqttConnectionService
                 $brokerDevices = $devices; // This collection is already filtered for this broker
                 $mqtt->subscribe($topic, function ($receivedTopic, $message, $retained, $matchedWildcards) use ($brokerDevices, $brokerType) {
                     Log::debug("MQTT: [SSL {$brokerType}] Received message on topic: {$receivedTopic}");
-                    app(MqttPayloadHandler::class)->handleMessage($brokerDevices, $receivedTopic, $message);
+                    $this->dispatchMessageJob($brokerDevices, $receivedTopic, $message);
                 }, 0);
                 
                 Log::info("MQTT: Added SSL {$brokerType} topic for subscription: {$topic} (device: {$device->name})");
@@ -548,5 +571,33 @@ class MqttConnectionService
         
         // Update device status to error for all devices on this broker
         $this->updateDevicesStatus($devices, 'error');
+    }
+
+    /**
+     * Dispatch message processing job for non-blocking handling.
+     */
+    private function dispatchMessageJob(Collection $devices, string $receivedTopic, string $message): void
+    {
+        // Find the device that matches this message topic
+        $matchedDevice = null;
+        foreach ($devices as $device) {
+            foreach ($device->mqtt_topics as $deviceTopic) {
+                if ($this->topicMatches($deviceTopic, $receivedTopic)) {
+                    $matchedDevice = $device;
+                    break 2;
+                }
+            }
+        }
+
+        if ($matchedDevice) {
+            Log::debug("MQTT: Dispatching job for device {$matchedDevice->name} on topic {$receivedTopic}");
+            
+            // Dispatch the job with appropriate queue configuration
+            $queueConnection = config('mqtt.queue.connection', config('queue.default'));
+            ProcessMqttMessage::dispatch($matchedDevice, $receivedTopic, $message)
+                ->onConnection($queueConnection);
+        } else {
+            Log::warning("MQTT: Received message on unmatched topic: {$receivedTopic}");
+        }
     }
 }
