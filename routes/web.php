@@ -34,65 +34,39 @@ Route::get('/', function () {
 });
 
 // Add to routes/web.php
-Route::get('/test-mqtt-protocol', function () {
-    set_time_limit(45);
+// Add to routes/api.php
+Route::get('/switch-to-mosquitto', function () {
+    $device = \App\Models\Device::where('mqtt_host', 'broker.emqx.io')->first();
     
-    $output = "=== MQTT Protocol Test ===\n";
-    $output .= "Time: " . now() . "\n\n";
-    
-    try {
-        $connectionSettings = (new \PhpMqtt\Client\ConnectionSettings())
-            ->setUsername('mqttuser')
-            ->setPassword('12345678')
-            ->setConnectTimeout(15);
-        
-        $mqtt = new \PhpMqtt\Client\MqttClient('broker.emqx.io', 1883, 'ploi-protocol-test-' . time());
-        
-        $output .= "Attempting MQTT connection to broker.emqx.io...\n";
-        $start = microtime(true);
-        
-        $mqtt->connect($connectionSettings, true);
-        
-        $connectTime = round((microtime(true) - $start) * 1000, 2);
-        $output .= "✅ MQTT Connected successfully in {$connectTime}ms!\n";
-        
-        // Test simple subscription
-        $testTopic = 'ploi/protocol/test/' . time();
-        $output .= "📡 Subscribed to: {$testTopic}\n";
-        $output .= "Now publish to this topic from MQTTX to test!\n";
-        
-        $messageReceived = false;
-        $mqtt->subscribe($testTopic, function($topic, $message) use (&$messageReceived, &$output) {
-            $output .= "📨 RECEIVED MESSAGE!\n";
-            $output .= "Topic: {$topic}\n";
-            $output .= "Message: {$message}\n";
-            $messageReceived = true;
-        }, 0);
-        
-        // Listen for 15 seconds
-        $startListen = time();
-        while ((time() - $startListen) < 15 && !$messageReceived) {
-            $mqtt->loop(true);
-            usleep(100000);
-        }
-        
-        if ($messageReceived) {
-            $output .= "🎉 SUCCESS! Ploi server can receive MQTT messages from EMQX!\n";
-        } else {
-            $output .= "⏰ Timeout: No messages received in 15 seconds\n";
-            $output .= "Try publishing to: {$testTopic}\n";
-        }
-        
-        $mqtt->disconnect();
-        $output .= "✅ Disconnected successfully\n";
-        
-    } catch (\Exception $e) {
-        $output .= "❌ MQTT Protocol Error: " . $e->getMessage() . "\n";
-        $output .= "Error Code: " . $e->getCode() . "\n";
+    if (!$device) {
+        $device = new \App\Models\Device();
+        $device->name = 'Mosquitto Test Device';
+        $device->device_id = 'mosquitto_ploi_device';
+        $device->connection_type = 'mqtt';
+        $device->is_active = true;
+        $device->user_id = 1;
     }
     
-    return response($output, 200, ['Content-Type' => 'text/plain']);
+    // Configure for Mosquitto (allows anonymous connections)
+    $device->mqtt_host = 'test.mosquitto.org';
+    $device->port = 1883;
+    $device->username = null; // Anonymous
+    $device->password = null;
+    $device->use_ssl = false; // Use Bluerhinos
+    $device->mqtt_topics = [
+        'ploi/sensors/temperature',
+        'ploi/sensors/humidity', 
+        'ploi/devices/status',
+        'ploi/test/+'
+    ];
+    $device->save();
+    
+    return "✅ Device switched to test.mosquitto.org!\n" .
+           "Host: {$device->mqtt_host}\n" .
+           "Username: Anonymous\n" .
+           "Topics: " . json_encode($device->mqtt_topics);
 });
+
 
 
 
