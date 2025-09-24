@@ -187,6 +187,11 @@ class Sensor extends Model
             return 'normal';
         }
 
+        // Check for geofence violations for GPS sensors
+        if (in_array($this->sensor_type, ['latitude', 'longitude'])) {
+            return $this->checkGeofenceStatus();
+        }
+
         // Only check thresholds for numeric values
         if (!is_numeric($this->value)) {
             return 'normal';
@@ -203,6 +208,103 @@ class Sensor extends Model
         }
 
         return 'normal';
+    }
+
+    /**
+     * Check if device is outside geofence (for GPS sensors)
+     */
+    private function checkGeofenceStatus(): string
+    {
+        // Get the device and its land
+        $device = $this->device;
+        if (!$device || !$device->land || !$device->land->geojson) {
+            return 'normal'; // No geofence defined
+        }
+
+        // Get both latitude and longitude sensors for this device
+        $latSensor = $device->sensors->where('sensor_type', 'latitude')->first();
+        $lngSensor = $device->sensors->where('sensor_type', 'longitude')->first();
+
+        if (!$latSensor || !$lngSensor || !$latSensor->value || !$lngSensor->value) {
+            return 'normal'; // No complete GPS coordinates
+        }
+
+        $lat = (float) $latSensor->value;
+        $lng = (float) $lngSensor->value;
+
+        if (!is_numeric($lat) || !is_numeric($lng)) {
+            return 'normal';
+        }
+
+        // Check if point is inside the land polygon
+        if ($this->isPointInsidePolygon($lat, $lng, $device->land->geojson)) {
+            return 'normal'; // Inside geofence
+        } else {
+            return 'high'; // Outside geofence - treat as high alert
+        }
+    }
+
+    /**
+     * Check if a point is inside a polygon using ray casting algorithm
+     */
+    private function isPointInsidePolygon(float $lat, float $lng, array $geojson): bool
+    {
+        try {
+            // Handle different GeoJSON geometry types
+            if (isset($geojson['type'])) {
+                if ($geojson['type'] === 'Polygon') {
+                    return $this->pointInPolygon([$lng, $lat], $geojson['coordinates'][0]);
+                } elseif ($geojson['type'] === 'MultiPolygon') {
+                    foreach ($geojson['coordinates'] as $polygon) {
+                        if ($this->pointInPolygon([$lng, $lat], $polygon[0])) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            }
+
+            // If it's a FeatureCollection or Feature, extract the geometry
+            if (isset($geojson['features']) && is_array($geojson['features'])) {
+                foreach ($geojson['features'] as $feature) {
+                    if (isset($feature['geometry'])) {
+                        return $this->isPointInsidePolygon($lat, $lng, $feature['geometry']);
+                    }
+                }
+            } elseif (isset($geojson['geometry'])) {
+                return $this->isPointInsidePolygon($lat, $lng, $geojson['geometry']);
+            }
+
+            return true; // Default to inside if we can't determine
+        } catch (\Exception $e) {
+            \Log::warning('Error checking geofence for sensor ' . $this->id . ': ' . $e->getMessage());
+            return true; // Default to inside on error
+        }
+    }
+
+    /**
+     * Ray casting algorithm to determine if point is inside polygon
+     */
+    private function pointInPolygon(array $point, array $polygon): bool
+    {
+        $x = $point[0];
+        $y = $point[1];
+        $inside = false;
+
+        $j = count($polygon) - 1;
+        for ($i = 0; $i < count($polygon); $i++) {
+            $xi = $polygon[$i][0];
+            $yi = $polygon[$i][1];
+            $xj = $polygon[$j][0];
+            $yj = $polygon[$j][1];
+
+            if ((($yi > $y) !== ($yj > $y)) && ($x < ($xj - $xi) * ($y - $yi) / ($yj - $yi) + $xi)) {
+                $inside = !$inside;
+            }
+            $j = $i;
+        }
+
+        return $inside;
     }
 
     public function getFormattedValueAttribute(): string

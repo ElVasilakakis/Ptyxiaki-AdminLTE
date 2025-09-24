@@ -37,9 +37,12 @@ class DashboardController extends Controller
             'inactive_lands' => $lands->where('enabled', false)->count(),
         ];
         
-        // Calculate alerts
+        // Calculate alerts (including geofence violations and threshold alerts)
         $alertSensors = $sensors->filter(function($sensor) {
-            return $sensor->alert_enabled && $sensor->getAlertStatus() !== 'normal';
+            $alertStatus = $sensor->getAlertStatus();
+            // Include threshold alerts for enabled sensors and geofence violations for GPS sensors
+            return ($sensor->alert_enabled && $alertStatus !== 'normal') || 
+                   (in_array($sensor->sensor_type, ['latitude', 'longitude']) && $alertStatus !== 'normal');
         });
         
         $stats['total_alerts'] = $alertSensors->count();
@@ -112,26 +115,34 @@ class DashboardController extends Controller
             $query->where('user_id', $user->id);
         })->with(['device'])->get();
         
-        // Calculate real-time stats
+        // Calculate real-time stats (including geofence violations)
+        $alertSensors = $sensors->filter(function($sensor) {
+            $alertStatus = $sensor->getAlertStatus();
+            // Include threshold alerts for enabled sensors and geofence violations for GPS sensors
+            return ($sensor->alert_enabled && $alertStatus !== 'normal') || 
+                   (in_array($sensor->sensor_type, ['latitude', 'longitude']) && $alertStatus !== 'normal');
+        });
+
         $stats = [
             'online_devices' => $devices->where('status', 'online')->count(),
             'offline_devices' => $devices->where('status', 'offline')->count(),
-            'total_alerts' => $sensors->filter(function($sensor) {
-                return $sensor->alert_enabled && $sensor->getAlertStatus() !== 'normal';
-            })->count(),
+            'total_alerts' => $alertSensors->count(),
             'recent_activity' => $devices->filter(function($device) {
                 return $device->last_seen_at && $device->last_seen_at->isAfter(Carbon::now()->subHour());
             })->count(),
         ];
         
-        // Get latest alerts
-        $latestAlerts = $sensors->filter(function($sensor) {
-            return $sensor->alert_enabled && $sensor->getAlertStatus() !== 'normal';
-        })->sortByDesc('reading_timestamp')->take(5)->map(function($sensor) {
+        // Get latest alerts (including geofence violations)
+        $latestAlerts = $alertSensors->sortByDesc('reading_timestamp')->take(5)->map(function($sensor) {
+            $alertType = '';
+            if (in_array($sensor->sensor_type, ['latitude', 'longitude']) && $sensor->getAlertStatus() === 'high') {
+                $alertType = ' (Geofence Violation)';
+            }
+            
             return [
                 'id' => $sensor->id,
                 'device_name' => $sensor->device->name,
-                'sensor_type' => $sensor->sensor_type,
+                'sensor_type' => $sensor->sensor_type . $alertType,
                 'value' => $sensor->getFormattedValue(),
                 'alert_status' => $sensor->getAlertStatus(),
                 'timestamp' => $sensor->reading_timestamp ? Carbon::parse($sensor->reading_timestamp)->diffForHumans() : 'Unknown',

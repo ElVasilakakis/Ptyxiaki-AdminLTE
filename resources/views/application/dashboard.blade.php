@@ -170,20 +170,36 @@
                         <div id="alerts-container" style="max-height: 300px; overflow-y: auto;">
                             @if($recentAlerts->count() > 0)
                                 @foreach($recentAlerts as $alert)
+                                    @php
+                                        $alertStatus = $alert->getAlertStatus();
+                                        $isGeofenceViolation = in_array($alert->sensor_type, ['latitude', 'longitude']) && $alertStatus === 'high';
+                                        $alertIcon = $isGeofenceViolation ? 'warning-octagon' : ($alertStatus === 'high' ? 'arrow-up' : 'arrow-down');
+                                        $alertClass = $alertStatus === 'high' ? 'danger' : 'warning';
+                                    @endphp
                                     <div class="d-flex align-items-center mb-3 alert-item">
                                         <div class="flex-shrink-0">
-                                            <div class="bg-{{ $alert->getAlertStatus() === 'high' ? 'danger' : 'warning' }} text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                                                <i class="ph-{{ $alert->getAlertStatus() === 'high' ? 'arrow-up' : 'arrow-down' }}"></i>
+                                            <div class="bg-{{ $alertClass }} text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                <i class="ph-{{ $alertIcon }}"></i>
                                             </div>
                                         </div>
                                         <div class="flex-grow-1 ms-3">
                                             <div class="fw-medium">{{ $alert->device->name }}</div>
-                                            <div class="text-muted small">{{ $alert->sensor_type }}: {{ $alert->getFormattedValue() }}</div>
+                                            <div class="text-muted small">
+                                                @if($isGeofenceViolation)
+                                                    <i class="ph-map-pin me-1 text-danger"></i>Geofence Violation - Device outside {{ $alert->device->land->land_name }}
+                                                @else
+                                                    {{ $alert->sensor_type }}: {{ $alert->getFormattedValue() }}
+                                                @endif
+                                            </div>
                                             <div class="text-muted small">{{ $alert->reading_timestamp ? \Carbon\Carbon::parse($alert->reading_timestamp)->diffForHumans() : 'Unknown' }}</div>
                                         </div>
                                         <div class="flex-shrink-0">
-                                            <span class="badge bg-{{ $alert->getAlertStatus() === 'high' ? 'danger' : 'warning' }}">
-                                                {{ ucfirst($alert->getAlertStatus()) }}
+                                            <span class="badge bg-{{ $alertClass }}">
+                                                @if($isGeofenceViolation)
+                                                    Geofence Alert
+                                                @else
+                                                    {{ ucfirst($alertStatus) }}
+                                                @endif
                                             </span>
                                         </div>
                                     </div>
