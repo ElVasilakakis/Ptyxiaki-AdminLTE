@@ -45,7 +45,7 @@ Limitless Theme Architecture και JavaScript Integration	22
 Land Management Interface	22
 Device Management Interface	26
 Webhook Integration και Multi-Protocol Support	28
-Sensors Management Interface	32
+Advanced Sensor Management Interface	32
 ESP32 Firmware - Hardware Integration	35
 6.	ΑΠΟΤΕΛΕΣΜΑΤΑ	39
 Real-time Geospatial Monitoring	39
@@ -220,7 +220,29 @@ Geofencing Map Visualization: Διαδραστικός χάρτης που εμ�
 
 
 Sensor Management Interface
+Webhook Integration και Multi-Protocol Support
+Το σύστημα υποστηρίζει δύο κύριους τρόπους επικοινωνίας με IoT συσκευές: MQTT και Webhook integration. Η webhook υποστήριξη αποτελεί μια καινοτόμα προσέγγιση που επιτρέπει στις συσκευές να στέλνουν δεδομένα απευθείας στο σύστημα μέσω HTTP POST requests, χωρίς την ανάγκη για MQTT broker.
+
+Webhook Configuration Interface
+Η διεπαφή webhook configuration παρουσιάζει στους χρήστες ένα αυτόματα γεννημένο webhook URL για κάθε συσκευή, με τη μορφή `/api/webhook/mqtt/{device_id}?token=***`. Το σύστημα δημιουργεί αυτόματα security tokens για κάθε συσκευή, εξασφαλίζοντας ασφαλή επικοινωνία. Η διεπαφή περιλαμβάνει λεπτομερείς οδηγίες για τη χρήση του webhook endpoint, με παραδείγματα JSON payload structure και HTTP headers.
+
+Device Type Management
+Το σύστημα υποστηρίζει πολλαπλούς τύπους συσκευών μέσω του connection_type field στο Device model:
+- **MQTT Devices**: Παραδοσιακές συσκευές που επικοινωνούν μέσω MQTT brokers
+- **Webhook Devices**: Συσκευές που στέλνουν δεδομένα απευθείας μέσω HTTP requests
+- **LoRaWAN Devices**: Συσκευές μεγάλης εμβέλειας που χρησιμοποιούν The Things Stack
+
+Automatic Sensor Discovery
+Όταν μια webhook συσκευή στέλνει δεδομένα για πρώτη φορά, το σύστημα αυτόματα δημιουργεί sensor entries στη βάση δεδομένων μέσω του `storeSensors()` method στον DevicesController. Αυτή η λειτουργία επιτρέπει plug-and-play functionality, όπου νέες συσκευές μπορούν να ενσωματωθούν στο σύστημα χωρίς manual configuration.
+
+Real-time Data Processing
+Τα webhook endpoints επεξεργάζονται εισερχόμενα δεδομένα σε πραγματικό χρόνο, ενημερώνοντας τα sensor readings και τις device status indicators. Το σύστημα υποστηρίζει complex JSON payloads με nested sensor data, επιτρέποντας στις συσκευές να στέλνουν πολλαπλές μετρήσεις σε ένα single request.
+
+Advanced Sensor Management Interface
 Sensors Configuration - Εξειδικευμένες σελίδες για fine-tuning των threshold settings κάθε αισθητήρα. Η διεπαφή χρησιμοποιεί το Limitless theme's advanced form components για τη ρύθμιση minimum/maximum values, alert thresholds, calibration offsets, και notification preferences. Κάθε sensor type (temperature, humidity, GPS, etc.) έχει customized interface elements που αντικατοπτρίζουν τις ιδιαίτερες απαιτήσεις του.
+
+Geofencing Integration
+Για GPS-enabled sensors, το σύστημα παρέχει προχωρημένες geofencing capabilities μέσω του GeofencingService. Οι χρήστες μπορούν να ορίσουν γεωγραφικά όρια για κάθε έκταση και να λαμβάνουν real-time alerts όταν οι συσκευές βγαίνουν εκτός των καθορισμένων ορίων. Η geofencing λογική υλοποιείται τόσο στο backend μέσω ray-casting αλγορίθμων όσο και στο frontend μέσω Leaflet.js geometric functions.
 
 
 
