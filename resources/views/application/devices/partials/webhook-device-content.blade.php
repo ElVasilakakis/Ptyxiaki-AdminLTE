@@ -58,8 +58,10 @@
                     <i class="ph-webhook me-2"></i>Webhook URL
                 </h6>
                 <p class="mb-2">Send sensor data to this endpoint:</p>
-                <div class="bg-dark text-light p-2 rounded mb-2">
-                    <code class="text-light">{{ url('/api/webhook/mqtt/' . $device->device_id . '?token=***') }}</code>
+                <div class="bg-dark text-black p-2 rounded mb-2">
+                    <code class="text-black">{{ url('/api/webhook/mqtt/' . $device->device_id) }}</code>
+                    <br>
+                    <code class="text-black">{{ url('/api/webhook/mqtt/') }}</code>
                 </div>
                 <small class="text-muted">
                     <i class="ph-info me-1"></i>
