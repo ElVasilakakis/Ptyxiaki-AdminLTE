@@ -437,8 +437,8 @@
 
             document.addEventListener('DOMContentLoaded', function() {
                 initializeMap();
-                // Refresh sensor data every 30 seconds
-                setInterval(refreshSensorData, 30000);
+                // Refresh sensor data every 10 seconds
+                setInterval(refreshSensorData, 10000);
             });
 
             function initializeMap() {
@@ -582,9 +582,145 @@
             }
 
             function refreshSensorData() {
-                // Webhook devices don't have real-time updates
-                // Data is updated when webhooks are received
-                console.log('Webhook device - data updates via HTTP POST');
+                // Webhook devices can also have live updates by polling the server
+                fetch(`/app/devices/{{ $device->id }}/sensor-data`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            updateSensorDisplay(data.sensors);
+                        }
+                    })
+                    .catch(error => console.error('Error refreshing sensor data:', error));
+            }
+
+            function updateSensorDisplay(sensors) {
+                // Update sensor values in the UI
+                sensors.forEach(sensor => {
+                    const sensorRow = document.querySelector(`tr[data-sensor-type="${sensor.sensor_type}"]`);
+                    if (sensorRow) {
+                        // Update sensor value
+                        const valueCell = sensorRow.querySelector('.sensor-value');
+                        if (valueCell) {
+                            valueCell.textContent = sensor.formatted_value;
+                        }
+
+                        // Update last update time
+                        const lastUpdateCell = sensorRow.querySelector('.sensor-last-update');
+                        if (lastUpdateCell) {
+                            lastUpdateCell.textContent = sensor.time_since_reading || 'Just updated';
+                        }
+
+                        // Update sensor status
+                        const statusCell = sensorRow.querySelector('.sensor-status');
+                        if (statusCell) {
+                            const indicator = statusCell.querySelector('.sensor-status-indicator');
+                            const statusText = statusCell.childNodes[statusCell.childNodes.length - 1];
+                            
+                            if (sensor.has_recent_reading) {
+                                indicator.className = 'sensor-status-indicator sensor-status-online';
+                                statusText.textContent = 'Online';
+                            } else {
+                                indicator.className = 'sensor-status-indicator sensor-status-offline';
+                                statusText.textContent = 'Offline';
+                            }
+                        }
+
+                        // Update alert status
+                        const alertCell = sensorRow.querySelector('.sensor-alert');
+                        if (alertCell) {
+                            const alertBadge = alertCell.querySelector('.alert-badge');
+                            if (alertBadge) {
+                                const alertStatus = sensor.alert_status || 'normal';
+                                alertBadge.className = `alert-badge ${alertStatus}`;
+                                
+                                if (alertStatus === 'high') {
+                                    alertBadge.innerHTML = '<i class="ph-arrow-up me-1"></i>High Alert';
+                                } else if (alertStatus === 'low') {
+                                    alertBadge.innerHTML = '<i class="ph-arrow-down me-1"></i>Low Alert';
+                                } else {
+                                    alertBadge.innerHTML = '<i class="ph-check me-1"></i>Normal';
+                                }
+                            }
+                        }
+
+                        // Add visual feedback for updated rows
+                        sensorRow.style.backgroundColor = '#e8f5e8';
+                        setTimeout(() => {
+                            sensorRow.style.backgroundColor = '';
+                        }, 2000);
+                    }
+                });
+                
+                // Update device location if GPS coordinates changed
+                const latSensor = sensors.find(s => s.sensor_type === 'latitude');
+                const lngSensor = sensors.find(s => s.sensor_type === 'longitude');
+                
+                if (latSensor && lngSensor && latSensor.value && lngSensor.value) {
+                    const newLat = parseFloat(latSensor.value);
+                    const newLng = parseFloat(lngSensor.value);
+                    
+                    if (deviceMarker) {
+                        deviceMarker.setLatLng([newLat, newLng]);
+                    } else {
+                        deviceMarker = L.marker([newLat, newLng])
+                            .addTo(map)
+                            .bindPopup('<strong>{{ $device->name }}</strong><br>{{ $device->device_id }}');
+                    }
+                }
+
+                // Update geofence status for GPS sensors
+                if (latSensor && lngSensor) {
+                    updateGeofenceStatus(latSensor, lngSensor);
+                }
+            }
+
+            function updateGeofenceStatus(latSensor, lngSensor) {
+                @if($device->land && $device->land->geojson)
+                    if (latSensor.value && lngSensor.value) {
+                        const lat = parseFloat(latSensor.value);
+                        const lng = parseFloat(lngSensor.value);
+                        
+                        if (!isNaN(lat) && !isNaN(lng) && landPolygon) {
+                            try {
+                                const point = turf.point([lng, lat]);
+                                const landGeojson = @json($device->land->geojson);
+                                const isInside = turf.booleanPointInPolygon(point, landGeojson);
+                                
+                                // Update geofence status for latitude sensor
+                                const latGeofenceStatus = document.getElementById('geofence-status-latitude');
+                                if (latGeofenceStatus) {
+                                    latGeofenceStatus.innerHTML = `
+                                        <span class="badge bg-${isInside ? 'success' : 'danger'} bg-opacity-10 text-${isInside ? 'success' : 'danger'}">
+                                            <i class="ph-${isInside ? 'check-circle' : 'warning-circle'} me-1"></i>
+                                            ${isInside ? 'Inside Geofence' : 'Outside Geofence'}
+                                        </span>
+                                    `;
+                                }
+                                
+                                // Update geofence status for longitude sensor
+                                const lngGeofenceStatus = document.getElementById('geofence-status-longitude');
+                                if (lngGeofenceStatus) {
+                                    lngGeofenceStatus.innerHTML = `
+                                        <span class="badge bg-${isInside ? 'success' : 'danger'} bg-opacity-10 text-${isInside ? 'success' : 'danger'}">
+                                            <i class="ph-${isInside ? 'check-circle' : 'warning-circle'} me-1"></i>
+                                            ${isInside ? 'Inside Geofence' : 'Outside Geofence'}
+                                        </span>
+                                    `;
+                                }
+                            } catch (error) {
+                                console.error('Error checking geofence:', error);
+                            }
+                        }
+                    }
+                @endif
             }
         </script>
     @endif
