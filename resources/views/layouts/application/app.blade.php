@@ -42,7 +42,7 @@
 
 		</div>
 		<!-- /main content -->
-
+        @include('layouts.application.demo_config')
 	</div>
 	<!-- /page content -->
 

@@ -55,61 +55,6 @@
 				</label>
 			</div>
 
-			<div class="fw-semibold mb-2">Direction</div>
-			<div class="list-group mb-3">
-				<label class="list-group-item list-group-item-action form-check border-width-1 rounded mb-0">
-					<div class="d-flex flex-fill my-1">
-						<div class="form-check-label d-flex me-2">
-							<i class="ph-translate ph-lg me-3"></i>
-							<div>
-								<span class="fw-bold">RTL direction</span>
-								<div class="text-muted">Toggle between LTR and RTL</div>
-							</div>
-						</div>
-						<input type="checkbox" name="layout-direction" value="rtl" class="form-check-input cursor-pointer m-0 ms-auto">
-					</div>
-				</label>
-			</div>
 
-			<div class="fw-semibold mb-2">Layouts</div>
-			<div class="row">
-				<div class="col-12">
-					<a href="index.html" class="d-block mb-3">
-						<img src="https://demo.interface.club/limitless/assets/images/layouts/layout_1.png" class="img-fluid img-thumbnail bg-primary bg-opacity-20 border-primary" alt="">
-					</a>
-				</div>
-				<div class="col-12">
-					<a href="../../layout_2/full/index.html" class="d-block mb-3">
-						<img src="https://demo.interface.club/limitless/assets/images/layouts/layout_2.png" class="img-fluid img-thumbnail" alt="">
-					</a>
-				</div>
-				<div class="col-12">
-					<a href="../../layout_3/full/index.html" class="d-block mb-3">
-						<img src="https://demo.interface.club/limitless/assets/images/layouts/layout_3.png" class="img-fluid img-thumbnail" alt="">
-					</a>
-				</div>
-				<div class="col-12">
-					<a href="../../layout_4/full/index.html" class="d-block mb-3">
-						<img src="https://demo.interface.club/limitless/assets/images/layouts/layout_4.png" class="img-fluid img-thumbnail" alt="">
-					</a>
-				</div>
-				<div class="col-12">
-					<a href="../../layout_5/full/index.html" class="d-block mb-3">
-						<img src="https://demo.interface.club/limitless/assets/images/layouts/layout_5.png" class="img-fluid img-thumbnail" alt="">
-					</a>
-				</div>
-				<div class="col-12">
-					<a href="../../layout_6/full/index.html" class="d-block">
-						<img src="https://demo.interface.club/limitless/assets/images/layouts/layout_6.png" class="img-fluid img-thumbnail" alt="">
-					</a>
-				</div>
-			</div>
-		</div>
-
-		<div class="border-top text-center py-2 px-3">
-			<a href="https://themeforest.net/item/limitless-responsive-web-application-kit/13080328?ref=kopyov" class="btn btn-yellow fw-semibold w-100 my-1" target="_blank">
-				<i class="ph-shopping-cart me-2"></i>
-				Purchase Limitless
-			</a>
 		</div>
 	</div>
