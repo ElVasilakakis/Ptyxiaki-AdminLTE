@@ -366,6 +366,201 @@
                             </div>
                         </div>
 
+                        <!-- MQTT Command Examples -->
+                        <div class="card border-info mb-4">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0">
+                                    <i class="ph-terminal-window me-2"></i>💻 MQTT Command Examples
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-3">Use these commands to test sending data to your MQTT devices:</p>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="fw-semibold text-info mb-2">Test Mosquitto Broker:</h6>
+                                        <div class="bg-dark text-light p-3 rounded mb-3">
+                                            <pre class="mb-0 small text-black"><code>mosquitto_pub -h test.mosquitto.org -p 1883 -t "ESP32-DEV-002/sensors" -m '{
+  "sensors": [
+    {
+      "type": "thermal",
+      "value": "22.8 celsius"
+    },
+    {
+      "type": "humidity", 
+      "value": "45.0 percent"
+    },
+    {
+      "type": "light",
+      "value": "26 percent"
+    },
+    {
+      "type": "potentiometer",
+      "value": "100 percent"
+    },
+    {
+      "type": "geolocation",
+      "subtype": "latitude",
+      "value": "39.527685"
+    },
+    {
+      "type": "geolocation",
+      "subtype": "longitude", 
+      "value": "-107.696663"
+    }
+  ],
+  "timestamp": 30091
+}'</code></pre>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="fw-semibold text-info mb-2">Test EMQX Broker:</h6>
+                                        <div class="bg-dark text-light p-3 rounded mb-3">
+                                            <pre class="mb-0 small text-black"><code>mosquitto_pub -h broker.emqx.io -p 1883 -t "ESP32-DEV-001/sensors" -m '{
+  "sensors": [
+    {
+      "type": "thermal",
+      "value": "22.8 celsius"
+    },
+    {
+      "type": "humidity",
+      "value": "45.0 percent"
+    },
+    {
+      "type": "light",
+      "value": "26 percent"
+    },
+    {
+      "type": "potentiometer",
+      "value": "100 percent"
+    },
+    {
+      "type": "geolocation",
+      "subtype": "latitude",
+      "value": "39.527685"
+    },
+    {
+      "type": "geolocation",
+      "subtype": "longitude",
+      "value": "-107.696663"
+    }
+  ],
+  "timestamp": 30091
+}'</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="alert alert-warning">
+                                    <h6 class="fw-semibold mb-1">📝 How to Use These Commands:</h6>
+                                    <ol class="mb-0">
+                                        <li>Install mosquitto client: <code>sudo apt-get install mosquitto-clients</code> (Linux) or download from mosquitto.org</li>
+                                        <li>Replace <code>ESP32-DEV-002</code> with your actual device ID</li>
+                                        <li>Replace the topic <code>ESP32-DEV-002/sensors</code> with your device's MQTT topic</li>
+                                        <li>Run the command in your terminal to simulate sensor data</li>
+                                        <li>Check your device page to see the data appear in real-time!</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- LoRaWAN Uplink Simulation -->
+                        <div class="card border-warning mb-4">
+                            <div class="card-header bg-warning text-white">
+                                <h6 class="mb-0">
+                                    <i class="ph-broadcast me-2"></i>📡 LoRaWAN Uplink Simulation (The Things Stack)
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-3">Use these examples to simulate uplink messages in The Things Stack console:</p>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="fw-semibold text-warning mb-2">Example Payloads:</h6>
+                                        
+                                        <div class="mb-3">
+                                            <strong>Temperature: -23.5°C</strong>
+                                            <div class="bg-dark text-light p-2 rounded mt-1">
+                                                <code class="text-black">0929162E5502466EACF8E70B48000F02</code>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <strong>Temperature: -5°C</strong>
+                                            <div class="bg-dark text-light p-2 rounded mt-1">
+                                                <code class="text-black">0929162E5502326EACF8E70B48000F02</code>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="alert alert-info">
+                                            <small><strong>How to use:</strong> Go to your device in The Things Stack console → Messaging → Simulate uplink → Paste the hex payload → Send</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="fw-semibold text-warning mb-2">Payload Formatter (JavaScript):</h6>
+                                        <div class="bg-dark text-light p-3 rounded">
+                                            <pre class="mb-0 small text-black"><code>function decodeUplink(input) {
+  var bytes = input.bytes;
+  var data = {};
+  
+  if (bytes.length >= 16) {
+    // Temperature (bytes 0-1): signed 16-bit, divide by 100
+    var temp_raw = (bytes[0] << 8) | bytes[1];
+    if (temp_raw > 32767) temp_raw -= 65536; // Handle negative values
+    data.temperature = temp_raw / 100;
+    
+    // Humidity (bytes 2-3): unsigned 16-bit, divide by 100
+    data.humidity = ((bytes[2] << 8) | bytes[3]) / 100;
+    
+    // Battery (byte 4): direct percentage
+    data.battery = bytes[4];
+    
+    // Latitude (bytes 5-8): signed 32-bit, divide by 1000000
+    var lat_raw = (bytes[5] << 24) | (bytes[6] << 16) | (bytes[7] << 8) | bytes[8];
+    if (lat_raw > 2147483647) lat_raw -= 4294967296; // Handle negative values
+    data.latitude = lat_raw / 1000000;
+    
+    // Longitude (bytes 9-12): signed 32-bit, divide by 1000000  
+    var lon_raw = (bytes[9] << 24) | (bytes[10] << 16) | (bytes[11] << 8) | bytes[12];
+    if (lon_raw > 2147483647) lon_raw -= 4294967296; // Handle negative values
+    data.longitude = lon_raw / 1000000;
+    
+    // Altitude (bytes 13-14): signed 16-bit, direct meters
+    var alt_raw = (bytes[13] << 8) | bytes[14];
+    if (alt_raw > 32767) alt_raw -= 65536; // Handle negative values
+    data.altitude = alt_raw;
+    
+    // GPS fix status (byte 15)
+    data.gps_fix = bytes[15];
+    
+    // Add fix quality description
+    var fix_types = ["No Fix", "2D Fix", "3D Fix"];
+    data.gps_fix_type = fix_types[bytes[15]] || "Unknown";
+  }
+  
+  return {
+    data: data,
+    warnings: [],
+    errors: []
+  };
+}</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="alert alert-success">
+                                    <h6 class="fw-semibold mb-1">🔧 Setup Instructions for The Things Stack:</h6>
+                                    <ol class="mb-0">
+                                        <li><strong>Add Payload Formatter:</strong> Go to your application → Payload formatters → Uplink → Add the JavaScript code above</li>
+                                        <li><strong>Configure Webhook:</strong> Go to Integrations → Webhooks → Add webhook</li>
+                                        <li><strong>Webhook URL:</strong> <code>https://yourdomain.com/api/lorawan/webhook</code></li>
+                                        <li><strong>Test:</strong> Use the hex payloads above to simulate uplink messages</li>
+                                        <li><strong>Verify:</strong> Check your device page to see decoded sensor data appear!</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Quick Setup Example -->
                         <div class="card border-success mb-4">
                             <div class="card-header bg-success text-white">
