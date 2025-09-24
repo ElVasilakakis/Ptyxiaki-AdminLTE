@@ -119,6 +119,9 @@
                             <i class="ph-map-trifold me-2"></i>Land & Device Map
                         </h6>
                         <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="locateLandOnMap()" title="Center map on land boundary">
+                                <i class="ph-crosshairs me-1"></i>Locate Land
+                            </button>
                             <div class="live-indicator">
                                 <span class="badge bg-success">
                                     <i class="ph-broadcast me-1"></i>Live Updates
@@ -205,7 +208,6 @@
                                             <th>Location</th>
                                             <th>Sensors</th>
                                             <th>Alerts</th>
-                                            <th>Last Seen</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -260,17 +262,15 @@
                                                         <span class="badge bg-success">Normal</span>
                                                     @endif
                                                 </td>
-                                                <td class="device-last-seen">
-                                                    @if($device->last_seen_at)
-                                                        <small>{{ $device->last_seen_at->diffForHumans() }}</small>
-                                                    @else
-                                                        <small class="text-muted">Never</small>
-                                                    @endif
-                                                </td>
                                                 <td>
-                                                    <a href="{{ route('app.devices.show', $device) }}" class="btn btn-sm btn-outline-primary">
-                                                        <i class="ph-eye me-1"></i>View
-                                                    </a>
+                                                    <div class="btn-group" role="group">
+                                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="locateDeviceOnMap({{ $device->id }})" title="Locate device on map">
+                                                            <i class="ph-crosshairs"></i>Locate
+                                                        </button>
+                                                        <a href="{{ route('app.devices.show', $device) }}" class="btn btn-sm btn-outline-primary">
+                                                            <i class="ph-eye me-1"></i>View
+                                                        </a>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         @endforeach
@@ -864,6 +864,89 @@
             document.getElementById('total-devices').textContent = totalDevices;
             document.getElementById('online-devices').textContent = onlineDevices;
             document.getElementById('alert-count').textContent = totalAlerts;
+        }
+        
+        // Function to locate land on map (center on land boundary)
+        function locateLandOnMap() {
+            console.log('🎯 Locating land on map...');
+            
+            if (landLayer) {
+                // Fit map to land boundary with some padding
+                map.fitBounds(landLayer.getBounds(), { 
+                    padding: [50, 50],
+                    maxZoom: 16 
+                });
+                
+                // Open land popup after a short delay
+                setTimeout(() => {
+                    landLayer.openPopup();
+                }, 500);
+                
+                console.log('✅ Map centered on land boundary');
+            } else {
+                console.warn('⚠️ No land boundary found to locate');
+                
+                // Fallback: center on land location if available
+                if (landData.location && landData.location.coordinates) {
+                    const [lng, lat] = landData.location.coordinates;
+                    map.setView([lat, lng], 15);
+                    console.log('✅ Map centered on land location');
+                } else {
+                    alert('Unable to locate land on map - no boundary or location data available');
+                }
+            }
+        }
+        
+        // Function to locate specific device on map
+        function locateDeviceOnMap(deviceId) {
+            console.log(`🎯 Locating device ${deviceId} on map...`);
+            
+            const marker = deviceMarkers[deviceId];
+            if (marker) {
+                // Center map on device marker
+                const markerLatLng = marker.getLatLng();
+                map.setView(markerLatLng, 18); // Zoom in close to the device
+                
+                // Open device popup after a short delay
+                setTimeout(() => {
+                    marker.openPopup();
+                }, 500);
+                
+                // Add temporary highlight effect to the marker
+                const markerElement = marker.getElement();
+                if (markerElement) {
+                    markerElement.style.transform = 'scale(1.3)';
+                    markerElement.style.transition = 'transform 0.3s ease';
+                    
+                    setTimeout(() => {
+                        markerElement.style.transform = 'scale(1)';
+                    }, 1000);
+                }
+                
+                console.log(`✅ Map centered on device ${deviceId}`);
+            } else {
+                console.warn(`⚠️ Device marker ${deviceId} not found on map`);
+                
+                // Try to find device in data and check if it has GPS coordinates
+                const device = devicesData.find(d => d.id === deviceId);
+                if (device) {
+                    const latSensor = device.sensors.find(s => s.sensor_type === 'latitude');
+                    const lngSensor = device.sensors.find(s => s.sensor_type === 'longitude');
+                    
+                    if (latSensor && lngSensor && latSensor.value && lngSensor.value) {
+                        const lat = parseFloat(latSensor.value);
+                        const lng = parseFloat(lngSensor.value);
+                        
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            map.setView([lat, lng], 18);
+                            console.log(`✅ Map centered on device ${deviceId} coordinates`);
+                            return;
+                        }
+                    }
+                }
+                
+                alert(`Unable to locate device on map - device not found or no GPS data available`);
+            }
         }
         
         // Cleanup on page unload
