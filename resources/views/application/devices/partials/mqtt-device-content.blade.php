@@ -308,6 +308,11 @@
                     <button type="button" class="btn btn-outline-primary btn-sm" onclick="locateDevice()">
                         <i class="ph-crosshairs me-1"></i>Locate Device
                     </button>
+                    @if($device->land && $device->land->geojson)
+                        <button type="button" class="btn btn-outline-info btn-sm" onclick="locateLand()">
+                            <i class="ph-map-trifold me-1"></i>Locate Land
+                        </button>
+                    @endif
                     <button type="button" class="btn btn-outline-secondary btn-sm" id="distance-btn" onclick="toggleDistanceMode()">
                         <i class="ph-ruler me-1"></i>Measure Distance
                     </button>

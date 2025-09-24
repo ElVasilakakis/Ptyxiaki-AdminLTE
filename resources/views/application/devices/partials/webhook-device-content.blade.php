@@ -82,11 +82,16 @@
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h6 class="fw-semibold mb-0">Device Location</h6>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-info btn-sm" id="distance-btn" onclick="toggleDistanceMode()" title="Click on map to measure distance to device">
-                        <i class="ph-ruler me-1"></i>Measure Distance
-                    </button>
                     <button type="button" class="btn btn-outline-primary btn-sm" id="locate-device-btn" onclick="locateDevice()" title="Center map on device location">
                         <i class="ph-crosshairs me-1"></i>Locate Device
+                    </button>
+                    @if($device->land && $device->land->geojson)
+                        <button type="button" class="btn btn-outline-info btn-sm" onclick="locateLand()" title="Center map on land boundary">
+                            <i class="ph-map-trifold me-1"></i>Locate Land
+                        </button>
+                    @endif
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="distance-btn" onclick="toggleDistanceMode()" title="Click on map to measure distance to device">
+                        <i class="ph-ruler me-1"></i>Measure Distance
                     </button>
                 </div>
             </div>

@@ -268,6 +268,26 @@
                 }
             }
 
+            function locateLand() {
+                if (landPolygon) {
+                    // Fit map to land boundary with some padding
+                    map.fitBounds(landPolygon.getBounds(), { 
+                        padding: [50, 50],
+                        maxZoom: 16 
+                    });
+                    
+                    // Open land popup after a short delay
+                    setTimeout(() => {
+                        landPolygon.openPopup();
+                    }, 500);
+                    
+                    console.log('✅ Map centered on land boundary');
+                } else {
+                    console.warn('⚠️ No land boundary found to locate');
+                    alert('Unable to locate land on map - no boundary data available');
+                }
+            }
+
             function toggleDistanceMode() {
                 distanceMode = !distanceMode;
                 const btn = document.getElementById('distance-btn');
@@ -436,6 +456,31 @@
                     attribution: '© OpenStreetMap contributors'
                 }).addTo(map);
 
+                // Add land polygon if geojson data exists
+                @if($device->land && $device->land->geojson)
+                    const landGeojson = @json($device->land->geojson);
+                    const landColor = '{{ $device->land->color ?? "#3388ff" }}';
+                    
+                    if (landGeojson) {
+                        landPolygon = L.geoJSON(landGeojson, {
+                            style: {
+                                color: landColor,
+                                weight: 3,
+                                opacity: 0.8,
+                                fillColor: landColor,
+                                fillOpacity: 0.2
+                            }
+                        }).addTo(map);
+                        
+                        landPolygon.bindPopup(`
+                            <div class="p-2">
+                                <h6 class="mb-1">{{ $device->land->land_name }}</h6>
+                                <small class="text-muted">Land Boundary</small>
+                            </div>
+                        `);
+                    }
+                @endif
+
                 // Add device marker if location data exists
                 @if($device->sensors->whereIn('sensor_type', ['latitude', 'longitude'])->count() >= 2)
                     @php
@@ -453,12 +498,42 @@
                         map.setView([deviceLat, deviceLng], 15);
                     @endif
                 @endif
+
+                // Fit map to show both device and land if both exist
+                @if($device->land && $device->land->geojson)
+                    if (landPolygon && deviceMarker) {
+                        const group = new L.featureGroup([landPolygon, deviceMarker]);
+                        map.fitBounds(group.getBounds().pad(0.1));
+                    } else if (landPolygon) {
+                        map.fitBounds(landPolygon.getBounds().pad(0.1));
+                    }
+                @endif
             }
 
             function locateDevice() {
                 if (deviceMarker) {
                     map.setView(deviceMarker.getLatLng(), 15);
                     deviceMarker.openPopup();
+                }
+            }
+
+            function locateLand() {
+                if (landPolygon) {
+                    // Fit map to land boundary with some padding
+                    map.fitBounds(landPolygon.getBounds(), { 
+                        padding: [50, 50],
+                        maxZoom: 16 
+                    });
+                    
+                    // Open land popup after a short delay
+                    setTimeout(() => {
+                        landPolygon.openPopup();
+                    }, 500);
+                    
+                    console.log('✅ Map centered on land boundary');
+                } else {
+                    console.warn('⚠️ No land boundary found to locate');
+                    alert('Unable to locate land on map - no boundary data available');
                 }
             }
 
