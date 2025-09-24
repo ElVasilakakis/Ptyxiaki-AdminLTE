@@ -166,7 +166,10 @@
   "sensors": [
     {"type": "temperature", "value": "25.6 celsius"},
     {"type": "humidity", "value": "60.2 percent"},
-    {"type": "light", "value": "75 percent"}
+    {"type": "light", "value": "75 percent"},
+    {"type": "geolocation", "subtype": "latitude","value": "39.527685"},
+    {"type": "geolocation", "subtype": "longitude", "value": "-107.696663"
+    }
   ]
 }</code></pre>
                                         </div>
@@ -177,7 +180,9 @@
                                             <pre class="mb-0 small"><code>{
   "temperature": 26.1,
   "humidity": 58.5,
-  "light": 80.0
+  "light": 80.0,
+  "latitude": 39.528865,
+  "longitude": -107.695123,
 }</code></pre>
                                         </div>
                                     </div>
@@ -190,7 +195,9 @@
       "data": {
         "temperature": 23.5,
         "humidity": 65.2,
-        "battery": 85
+        "battery": 85,
+        "latitude": 39.529123,
+        "longitude": -107.694321
       }
     }
   }

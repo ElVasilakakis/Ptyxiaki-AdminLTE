@@ -37,12 +37,11 @@ class DashboardController extends Controller
             'inactive_lands' => $lands->where('enabled', false)->count(),
         ];
         
-        // Calculate alerts (including geofence violations and threshold alerts)
+        // Calculate alerts (including geofence violations and ALL threshold alerts)
         $alertSensors = $sensors->filter(function($sensor) {
             $alertStatus = $sensor->getAlertStatus();
-            // Include threshold alerts for enabled sensors and geofence violations for GPS sensors
-            return ($sensor->alert_enabled && $alertStatus !== 'normal') || 
-                   (in_array($sensor->sensor_type, ['latitude', 'longitude']) && $alertStatus !== 'normal');
+            // Include ALL threshold alerts (regardless of alert_enabled) and geofence violations for GPS sensors
+            return $alertStatus !== 'normal';
         });
         
         $stats['total_alerts'] = $alertSensors->count();
@@ -115,12 +114,11 @@ class DashboardController extends Controller
             $query->where('user_id', $user->id);
         })->with(['device'])->get();
         
-        // Calculate real-time stats (including geofence violations)
+        // Calculate real-time stats (including geofence violations and ALL threshold alerts)
         $alertSensors = $sensors->filter(function($sensor) {
             $alertStatus = $sensor->getAlertStatus();
-            // Include threshold alerts for enabled sensors and geofence violations for GPS sensors
-            return ($sensor->alert_enabled && $alertStatus !== 'normal') || 
-                   (in_array($sensor->sensor_type, ['latitude', 'longitude']) && $alertStatus !== 'normal');
+            // Include ALL threshold alerts (regardless of alert_enabled) and geofence violations for GPS sensors
+            return $alertStatus !== 'normal';
         });
 
         $stats = [

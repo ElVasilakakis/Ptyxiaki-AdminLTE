@@ -95,7 +95,7 @@
                                         $alertCount = 0;
                                         foreach($land->devices as $device) {
                                             foreach($device->sensors as $sensor) {
-                                                if($sensor->alert_enabled && $sensor->getAlertStatus() !== 'normal') {
+                                                if($sensor->getAlertStatus() !== 'normal') {
                                                     $alertCount++;
                                                 }
                                             }

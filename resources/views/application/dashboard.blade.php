@@ -288,16 +288,19 @@
             </div>
         </div>
 
-        <!-- Devices Overview Map -->
-        @if($devicesWithGPS->count() > 0)
+        <!-- Lands & Devices Overview Map -->
+        @if($lands->count() > 0 || $devicesWithGPS->count() > 0)
         <div class="row mb-4">
             <div class="col-12">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">
-                            <i class="ph-map-trifold me-2"></i>Devices Overview Map
+                            <i class="ph-map-trifold me-2"></i>Lands & Devices Overview Map
                         </h6>
-                        <span class="badge bg-info">{{ $devicesWithGPS->count() }} devices with GPS</span>
+                        <div class="d-flex gap-2">
+                            <span class="badge bg-primary">{{ $lands->count() }} lands</span>
+                            <span class="badge bg-info">{{ $devicesWithGPS->count() }} devices with GPS</span>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         <div id="overview-map" style="height: 400px; width: 100%;"></div>
@@ -408,7 +411,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- Include Leaflet for map -->
-    @if($devicesWithGPS->count() > 0)
+    @if($lands->count() > 0 || $devicesWithGPS->count() > 0)
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     @endif
@@ -457,11 +460,12 @@
         const deviceTypes = @json($deviceTypes);
         const sensorTypes = @json($sensorTypes);
         const devicesWithGPS = @json($devicesWithGPS);
+        const landsData = @json($lands);
         
         // Initialize dashboard when page loads
         document.addEventListener('DOMContentLoaded', function() {
             initializeCharts();
-            @if($devicesWithGPS->count() > 0)
+            @if($lands->count() > 0 || $devicesWithGPS->count() > 0)
             initializeMap();
             @endif
             startLiveUpdates();
@@ -570,11 +574,190 @@
         @if($devicesWithGPS->count() > 0)
         // Initialize overview map
         function initializeMap() {
-            // Calculate center point
+            console.log('🗺️ Initializing dashboard overview map...');
+            console.log('📍 Lands data:', landsData);
+            console.log('📱 Devices with GPS:', devicesWithGPS);
+            
+            // Calculate center point from all lands and devices
             let centerLat = 39.0742;
             let centerLng = 21.8243;
+            let allBounds = [];
             
-            if (devicesWithGPS.length > 0) {
+            // Create map
+            overviewMap = L.map('overview-map').setView([centerLat, centerLng], 10);
+            
+            // Add tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(overviewMap);
+            
+            // Add all land boundaries
+            console.log('🏞️ Adding land boundaries...');
+            landsData.forEach(land => {
+                if (land.geojson) {
+                    console.log(`📍 Adding land: ${land.land_name}`);
+                    
+                    const landColor = land.color || '#3388ff';
+                    
+                    try {
+                        const landLayer = L.geoJSON(land.geojson, {
+                            style: {
+                                color: landColor,
+                                weight: 3,
+                                opacity: 0.8,
+                                fillColor: landColor,
+                                fillOpacity: 0.2
+                            }
+                        }).addTo(overviewMap);
+                        
+                        // Add land popup
+                        landLayer.bindPopup(`
+                            <div class="p-2">
+                                <h6 class="mb-1">${land.land_name}</h6>
+                                <small class="text-muted">Land Boundary</small><br>
+                                <span class="badge bg-${land.enabled ? 'success' : 'secondary'} mt-1">
+                                    ${land.enabled ? 'Active' : 'Inactive'}
+                                </span>
+                                <br><small class="text-muted mt-1">${land.devices.length} devices</small>
+                            </div>
+                        `);
+                        
+                        // Collect bounds for fitting
+                        allBounds.push(landLayer.getBounds());
+                        
+                        console.log(`✅ Added land boundary for: ${land.land_name}`);
+                    } catch (error) {
+                        console.error(`❌ Error adding land ${land.land_name}:`, error);
+                    }
+                } else {
+                    console.warn(`⚠️ No geojson data for land: ${land.land_name}`);
+                }
+            });
+            
+            // Add device markers
+            console.log('📱 Adding device markers...');
+            devicesWithGPS.forEach(device => {
+                const latSensor = device.sensors.find(s => s.sensor_type === 'latitude');
+                const lngSensor = device.sensors.find(s => s.sensor_type === 'longitude');
+                
+                if (latSensor && lngSensor) {
+                    const lat = parseFloat(latSensor.value);
+                    const lng = parseFloat(lngSensor.value);
+                    
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        // Determine marker color based on status and alerts
+                        let markerColor = device.status === 'online' ? '#10b981' : '#6b7280';
+                        let markerIcon = 'device-mobile';
+                        
+                        // Check for alerts (including geofence violations)
+                        const hasAlerts = device.sensors.some(sensor => {
+                            const alertStatus = sensor.alert_status || 'normal';
+                            return (sensor.alert_enabled && alertStatus !== 'normal') || 
+                                   (['latitude', 'longitude'].includes(sensor.sensor_type) && alertStatus !== 'normal');
+                        });
+                        
+                        if (hasAlerts) {
+                            markerColor = '#ef4444';
+                            markerIcon = 'warning-circle';
+                        }
+                        
+                        const markerHtml = `
+                            <div style="
+                                background-color: ${markerColor}; 
+                                width: 24px; 
+                                height: 24px; 
+                                border-radius: 50%; 
+                                display: flex; 
+                                align-items: center; 
+                                justify-content: center; 
+                                border: 3px solid white; 
+                                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                                cursor: pointer;
+                            ">
+                                <i class="ph-${markerIcon}" style="color: white; font-size: 12px;"></i>
+                            </div>
+                        `;
+                        
+                        const customIcon = L.divIcon({
+                            html: markerHtml,
+                            className: 'custom-device-marker',
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 12]
+                        });
+                        
+                        const marker = L.marker([lat, lng], { icon: customIcon }).addTo(overviewMap);
+                        
+                        // Create device popup with more details
+                        const deviceAlerts = device.sensors.filter(sensor => {
+                            const alertStatus = sensor.alert_status || 'normal';
+                            return (sensor.alert_enabled && alertStatus !== 'normal') || 
+                                   (['latitude', 'longitude'].includes(sensor.sensor_type) && alertStatus !== 'normal');
+                        });
+                        
+                        marker.bindPopup(`
+                            <div class="p-3" style="min-width: 200px;">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="ph-device-mobile me-2 text-primary"></i>
+                                    <div>
+                                        <h6 class="mb-0">${device.name}</h6>
+                                        <small class="text-muted">${device.device_id}</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-2">
+                                    <span class="badge bg-light text-dark me-1">${device.land.land_name}</span>
+                                    <span class="badge bg-${device.status === 'online' ? 'success' : 'secondary'}">${device.status.charAt(0).toUpperCase() + device.status.slice(1)}</span>
+                                </div>
+                                
+                                ${deviceAlerts.length > 0 ? `
+                                    <div class="alert alert-warning py-2 mb-2">
+                                        <i class="ph-warning-circle me-1"></i>
+                                        <strong>${deviceAlerts.length} Alert${deviceAlerts.length > 1 ? 's' : ''}</strong>
+                                    </div>
+                                ` : ''}
+                                
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <small class="text-muted">Type</small>
+                                        <div class="fw-medium">${device.device_type}</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Sensors</small>
+                                        <div class="fw-medium">${device.sensors.length}</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-flex gap-2 mt-3">
+                                    <a href="/app/devices/${device.id}" class="btn btn-sm btn-primary flex-fill">
+                                        <i class="ph-eye me-1"></i>View Details
+                                    </a>
+                                </div>
+                            </div>
+                        `);
+                        
+                        console.log(`✅ Added device marker: ${device.name}`);
+                    }
+                }
+            });
+            
+            // Fit map to show all content
+            if (allBounds.length > 0) {
+                const group = new L.featureGroup();
+                allBounds.forEach(bounds => {
+                    // Create a temporary layer to add bounds to the group
+                    const tempLayer = L.rectangle(bounds, {opacity: 0});
+                    group.addLayer(tempLayer);
+                });
+                
+                try {
+                    overviewMap.fitBounds(group.getBounds(), { padding: [20, 20] });
+                    console.log('✅ Map fitted to show all lands and devices');
+                } catch (error) {
+                    console.warn('⚠️ Could not fit bounds, using default view');
+                }
+            } else if (devicesWithGPS.length > 0) {
+                // Fallback: center on devices if no land bounds
                 const latitudes = devicesWithGPS.map(device => {
                     const latSensor = device.sensors.find(s => s.sensor_type === 'latitude');
                     return latSensor ? parseFloat(latSensor.value) : null;
@@ -588,72 +771,12 @@
                 if (latitudes.length > 0 && longitudes.length > 0) {
                     centerLat = latitudes.reduce((a, b) => a + b) / latitudes.length;
                     centerLng = longitudes.reduce((a, b) => a + b) / longitudes.length;
+                    overviewMap.setView([centerLat, centerLng], 12);
+                    console.log('✅ Map centered on devices');
                 }
             }
             
-            // Create map
-            overviewMap = L.map('overview-map').setView([centerLat, centerLng], 10);
-            
-            // Add tile layer
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(overviewMap);
-            
-            // Add device markers
-            devicesWithGPS.forEach(device => {
-                const latSensor = device.sensors.find(s => s.sensor_type === 'latitude');
-                const lngSensor = device.sensors.find(s => s.sensor_type === 'longitude');
-                
-                if (latSensor && lngSensor) {
-                    const lat = parseFloat(latSensor.value);
-                    const lng = parseFloat(lngSensor.value);
-                    
-                    if (!isNaN(lat) && !isNaN(lng)) {
-                        // Determine marker color
-                        let markerColor = device.status === 'online' ? '#10b981' : '#6b7280';
-                        
-                        // Check for alerts
-                        const hasAlerts = device.sensors.some(sensor => {
-                            return sensor.alert_enabled && sensor.alert_status && sensor.alert_status !== 'normal';
-                        });
-                        
-                        if (hasAlerts) {
-                            markerColor = '#ef4444';
-                        }
-                        
-                        const markerHtml = `
-                            <div style="
-                                background-color: ${markerColor}; 
-                                width: 20px; 
-                                height: 20px; 
-                                border-radius: 50%; 
-                                border: 2px solid white; 
-                                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                            "></div>
-                        `;
-                        
-                        const customIcon = L.divIcon({
-                            html: markerHtml,
-                            className: 'custom-marker',
-                            iconSize: [20, 20],
-                            iconAnchor: [10, 10]
-                        });
-                        
-                        const marker = L.marker([lat, lng], { icon: customIcon }).addTo(overviewMap);
-                        
-                        marker.bindPopup(`
-                            <div class="p-2">
-                                <h6 class="mb-1">${device.name}</h6>
-                                <small class="text-muted">${device.land.land_name}</small><br>
-                                <span class="badge bg-${device.status === 'online' ? 'success' : 'secondary'} mt-1">
-                                    ${device.status.charAt(0).toUpperCase() + device.status.slice(1)}
-                                </span>
-                            </div>
-                        `);
-                    }
-                }
-            });
+            console.log('✅ Dashboard overview map initialized successfully');
         }
         @endif
         
