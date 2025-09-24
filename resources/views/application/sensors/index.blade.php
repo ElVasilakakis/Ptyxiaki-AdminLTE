@@ -19,9 +19,9 @@
                 <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
                     <i class="ph-x me-2"></i>Clear Filters
                 </button>
-                <button type="button" class="btn btn-outline-info" onclick="toggleLiveUpdates()" id="live-toggle-btn">
+                {{-- <button type="button" class="btn btn-outline-info" onclick="toggleLiveUpdates()" id="live-toggle-btn">
                     <i class="ph-pause me-2"></i>Pause Live Updates
-                </button>
+                </button> --}}
             </div>
         </div>
     </div>
