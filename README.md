@@ -1,4 +1,4 @@
-mosquitto_pub -h test.mosquitto.org -p 1883 -t "ESP32-DEV-001/sensors" -m '{
+mosquitto_pub -h test.mosquitto.org -p 1883 -t "ESP32-DEV-002/sensors" -m '{
   "sensors": [
     {
       "type": "thermal",
