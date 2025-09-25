@@ -54,7 +54,7 @@ class DevicesController extends Controller
             'timeout' => 'nullable|integer|min:1|max:300',
             'mqtt_host' => 'nullable|string|max:255',
             'mqtt_topics' => 'nullable|array',
-            'mqtt_topics.*' => 'string|max:255',
+            'mqtt_topics.*' => 'string|nullable|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -178,7 +178,7 @@ class DevicesController extends Controller
             'timeout' => 'nullable|integer|min:1|max:300',
             'mqtt_host' => 'nullable|string|max:255',
             'mqtt_topics' => 'nullable|array',
-            'mqtt_topics.*' => 'string|max:255',
+            'mqtt_topics.*' => 'string|nullable|max:255',
         ]);
 
         if ($validator->fails()) {
